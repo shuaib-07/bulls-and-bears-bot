@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Bulls & Bears - Discord Command Reference & Operational Guide</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+        :root {
+            --bg: #ffffff;
+            --card-bg: #f8fafc;
+            --border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --accent: #1e3a8a;
+            --accent-light: #eff6ff;
+            --accent-border: #bfdbfe;
+            --success: #15803d;
+            --success-bg: #f0fdf4;
+            --warning: #b45309;
+            --danger: #b91c1c;
+            --danger-bg: #fef2f2;
+            --mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.5;
+            font-size: 13px;
+            padding: 24px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 14px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .title-block h1 {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--accent);
+            text-transform: uppercase;
+        }
+
+        .title-block p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .meta-badge {
+            background: var(--accent-light);
+            border: 1px solid var(--accent-border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent);
+            text-align: right;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 22px 0 10px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .channel-tag {
+            background: #334155;
+            color: #ffffff;
+            font-family: var(--mono);
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .command-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            page-break-inside: avoid;
+        }
+
+        .command-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 6px;
+        }
+
+        .cmd-name {
+            font-family: var(--mono);
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .cmd-badge {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .badge-player {
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+
+        .badge-admin {
+            background: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        .cmd-desc {
+            font-size: 12.5px;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        table.param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+            margin-top: 6px;
+        }
+
+        table.param-table th {
+            text-align: left;
+            background: #f1f5f9;
+            color: var(--text-muted);
+            padding: 4px 8px;
+            font-weight: 600;
+            border: 1px solid var(--border);
+        }
+
+        table.param-table td {
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .param-name {
+            font-family: var(--mono);
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .param-type {
+            font-family: var(--mono);
+            font-size: 10.5px;
+            color: #64748b;
+        }
+
+        .example-box {
+            margin-top: 6px;
+            background: #ffffff;
+            border: 1px dashed #cbd5e1;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: #334155;
+        }
+
+        .flow-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 14px 0;
+            page-break-inside: avoid;
+        }
+
+        .flow-step {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 11.5px;
+        }
+
+        .step-num {
+            font-weight: 800;
+            color: var(--accent);
+            font-size: 11px;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+        }
+
+        .step-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--text-main);
+        }
+
+        .notes-box {
+            background: #fffbeb;
+            border: 1px solid #fef3c7;
+            border-left: 4px solid #d97706;
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-size: 11.5px;
+            color: #92400e;
+            margin: 16px 0;
+            page-break-inside: avoid;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+                font-size: 11.5px;
+            }
+
+            .command-card {
+                page-break-inside: avoid;
+                margin-bottom: 8px;
+                padding: 8px 10px;
+            }
+
+            .section-title {
+                margin-top: 14px;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="title-block">
+            <h1>Bulls & Bears</h1>
+            <p>Official Discord Trading Floor & Administrator Command Guide</p>
+        </div>
+        <div class="meta-badge">
+            Simulation Length: 6 Rounds (R0–R5)<br>
+            Market Pool: 20 &rarr; 30 Stocks | 100 Float
+        </div>
+    </header>
+
+    <div class="notes-box">
+        <strong>Core Tournament Constraints:</strong> All teams manage a starting balance of
+        <strong>$100,000.00</strong> in virtual cash[cite: 1, 2, 4]. Every equity has a hard market ceiling of
+        <strong>100 available shares</strong>[cite: 4]. Trades are permitted strictly when the round trading window is
+        active (10 minutes)[cite: 2, 4]. Short selling is blocked[cite: 2].
+    </div>
+
+    <!-- SECTION 1: TRADING FLOOR -->
+    <div class="section-title">
+        <span>Channel:</span> <span class="channel-tag">#trading-floor</span>
+        <span style="font-size: 11px; font-weight: normal; color: var(--text-muted); margin-left: auto;">Traders &
+            Public Market Desk</span>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/register</span>
+            <span class="cmd-badge badge-player">Trader Setup</span>
+        </div>
+        <div class="cmd-desc">Registers the designated team account, sets starting liquid balance to $100,000, and
+            enables trading access[cite: 1, 4].</div>
+        <table class="param-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="param-name">team_name</td>
+                    <td class="param-type">String</td>
+                    <td>Yes</td>
+                    <td>Official name of your registered team (maximum 2 members per team)[cite: 1, 2].</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="example-box">Example: /register team_name: Alpha Capital</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/portfolio</span>
+            <span class="cmd-badge badge-player">Player Query</span>
+        </div>
+        <div class="cmd-desc">Displays current available cash, total net asset value, cumulative P/L, and an itemized
+            breakdown of owned stock positions[cite: 4].</div>
+        <div class="example-box">Example: /portfolio</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/market</span>
+            <span class="cmd-badge badge-player">Public Board</span>
+        </div>
+        <div class="cmd-desc">Returns a live list of all active stocks, their current trading price, and remaining float
+            available for purchase from the market pool[cite: 4].</div>
+        <div class="example-box">Example: /market</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/buy</span>
+            <span class="cmd-badge badge-player">Execution</span>
+        </div>
+        <div class="cmd-desc">Purchases shares from the public market pool at current market price. Checks cash
+            reserves, available float, and window status[cite: 4].</div>
+        <table class="param-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="param-name">ticker</td>
+                    <td class="param-type">String</td>
+                    <td>Yes</td>
+                    <td>Ticker symbol of the stock (e.g., NVDA, AAPL, MSFT)[cite: 3, 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">shares</td>
+                    <td class="param-type">Integer</td>
+                    <td>Yes</td>
+                    <td>Whole number of shares to buy (must not exceed market float)[cite: 2, 4].</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="example-box">Example: /buy ticker: NVDA shares: 15</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/sell</span>
+            <span class="cmd-badge badge-player">Execution</span>
+        </div>
+        <div class="cmd-desc">Sells owned shares back to the open market at current market price. Credits team cash
+            balance and restores the public float[cite: 4].</div>
+        <table class="param-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="param-name">ticker</td>
+                    <td class="param-type">String</td>
+                    <td>Yes</td>
+                    <td>Ticker symbol of the stock being sold[cite: 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">shares</td>
+                    <td class="param-type">Integer</td>
+                    <td>Yes</td>
+                    <td>Number of shares to sell (cannot exceed owned holdings)[cite: 2, 4].</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="example-box">Example: /sell ticker: AAPL shares: 10</div>
+    </div>
+
+    <!-- SECTION 2: SWAP DESK -->
+    <div class="section-title" style="page-break-before: auto;">
+        <span>Channel:</span> <span class="channel-tag">#swap-desk</span>
+        <span style="font-size: 11px; font-weight: normal; color: var(--text-muted); margin-left: auto;">Peer-to-Peer
+            Stock Swaps</span>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/swap</span>
+            <span class="cmd-badge badge-player">Negotiated Trade</span>
+        </div>
+        <div class="cmd-desc">
+            Submits a peer-to-peer stock-for-stock swap proposal with an interactive confirmation widget[cite: 2, 4].
+            The counterparty must click <strong>Accept Swap</strong> within 90 seconds to settle[cite: 2, 4]. No cash
+            adjustments permitted[cite: 2, 4].
+        </div>
+        <table class="param-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="param-name">target</td>
+                    <td class="param-type">User Mention</td>
+                    <td>Yes</td>
+                    <td>Discord tag of the opposing team's designated trader account[cite: 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">give_ticker</td>
+                    <td class="param-type">String</td>
+                    <td>Yes</td>
+                    <td>Ticker symbol of the stock you are transferring[cite: 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">give_shares</td>
+                    <td class="param-type">Integer</td>
+                    <td>Yes</td>
+                    <td>Number of shares you will give to the target[cite: 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">receive_ticker</td>
+                    <td class="param-type">String</td>
+                    <td>Yes</td>
+                    <td>Ticker symbol of the stock you are demanding in return[cite: 4].</td>
+                </tr>
+                <tr>
+                    <td class="param-name">receive_shares</td>
+                    <td class="param-type">Integer</td>
+                    <td>Yes</td>
+                    <td>Number of shares you demand from the target[cite: 4].</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="example-box">Example: /swap target: @TraderBob give_ticker: NVDA give_shares: 20 receive_ticker:
+            TSLA receive_shares: 15</div>
+    </div>
+
+    <!-- SECTION 3: ADMIN CONSOLE -->
+    <div class="section-title">
+        <span>Channel:</span> <span class="channel-tag">#admin-console</span>
+        <span style="font-size: 11px; font-weight: normal; color: var(--text-muted); margin-left: auto;">Restricted
+            Organizer Controls</span>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/admin reset_game</span>
+            <span class="cmd-badge badge-admin">Organizer</span>
+        </div>
+        <div class="cmd-desc">Wipes existing transactions, restores initial 20-stock board, resets floats to 100, and
+            prepares database for a fresh tournament run[cite: 3, 4].</div>
+        <div class="example-box">Example: /admin reset_game</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/admin start_round</span>
+            <span class="cmd-badge badge-admin">Organizer</span>
+        </div>
+        <div class="cmd-desc">Sets active round, releases the round's macroeconomic news flash into
+            <code>#news-flash</code>, unlocks the 10-minute trading window, and unlocks the 10 expansion stocks if round
+            &ge; 2[cite: 3, 4].</div>
+        <table class="param-table">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="param-name">round_number</td>
+                    <td class="param-type">Integer</td>
+                    <td>Yes</td>
+                    <td>Target round index: <code>0</code>, <code>1</code>, <code>2</code>, <code>3</code>,
+                        <code>4</code>, or <code>5</code>[cite: 3].</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="example-box">Example: /admin start_round round_number: 1</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/admin close_trading</span>
+            <span class="cmd-badge badge-admin">Organizer</span>
+        </div>
+        <div class="cmd-desc">Immediately disables trading. All `/buy`, `/sell`, and `/swap` requests will be rejected
+            by the bot until the next round starts[cite: 4].</div>
+        <div class="example-box">Example: /admin close_trading</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/admin apply_round_prices</span>
+            <span class="cmd-badge badge-admin">Organizer</span>
+        </div>
+        <div class="cmd-desc">Calculates and updates stock prices according to the current round's master sheet
+            movements and notifies traders in <code>#market-board</code>[cite: 3, 4].</div>
+        <div class="example-box">Example: /admin apply_round_prices</div>
+    </div>
+
+    <div class="command-card">
+        <div class="command-header">
+            <span class="cmd-name">/admin liquidate</span>
+            <span class="cmd-badge badge-admin">Tournament End</span>
+        </div>
+        <div class="cmd-desc">Locks trading permanently, liquidates every team's held shares at current market prices,
+            credits cash, and publishes the final winners' podium[cite: 2, 4].</div>
+        <div class="example-box">Example: /admin liquidate</div>
+    </div>
+
+    <!-- SECTION 4: OPERATOR FLOW -->
+    <div class="section-title">Standard Round Execution Flow</div>
+    <div class="flow-grid">
+        <div class="flow-step">
+            <div class="step-num">Step 1</div>
+            <div class="step-title">Open Round</div>
+            Run <code>/admin start_round</code>. Bot announces news in <code>#news-flash</code> and starts trading[cite:
+            4].
+        </div>
+        <div class="flow-step">
+            <div class="step-num">Step 2</div>
+            <div class="step-title">10-Min Window</div>
+            Participants negotiate in the room and execute orders on Discord[cite: 2, 4].
+        </div>
+        <div class="flow-step">
+            <div class="step-num">Step 3</div>
+            <div class="step-title">Close Market</div>
+            Run <code>/admin close_trading</code> when timer runs out to freeze order execution[cite: 4].
+        </div>
+        <div class="flow-step">
+            <div class="step-num">Step 4</div>
+            <div class="step-title">Update Valuations</div>
+            Run <code>/admin apply_round_prices</code> to adjust stock prices and update portfolios[cite: 3, 4].
+        </div>
+    </div>
+
+</body>
+
+</html>

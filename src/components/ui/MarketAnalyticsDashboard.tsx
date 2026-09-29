@@ -1,0 +1,307 @@
+"use client";
+
+import { useState } from "react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronDown,
+  Sparkles,
+  Layers,
+  ShoppingBag,
+  TrendingUp,
+} from "lucide-react";
+import { STOCKS_DATA } from "@/src/lib/market-data";
+import { CompanyLogo } from "./CompanyLogo";
+import { formatCurrency } from "@/src/lib/utils";
+
+// Synthetic historical series generator
+function generateSeries(base: number, drift: number) {
+  const out: number[] = [base];
+  for (let i = 1; i < 24; i++) {
+    const noise = (Math.sin(i * 1.7 + base) * 0.5 + Math.cos(i * 0.6) * 0.3) * 0.6;
+    out.push(out[i - 1] * (1 + drift / 6 + noise / 100));
+  }
+  return out;
+}
+
+const ALLOCATION = [
+  { name: "Tech & Chips", pct: 42, color: "rgb(255 95 31)" },
+  { name: "Financials", pct: 23, color: "rgb(56 189 248)" },
+  { name: "Energy & Oil", pct: 18, color: "rgb(16 185 129)" },
+  { name: "Healthcare", pct: 9, color: "rgb(168 85 247)" },
+  { name: "Cash Reserve", pct: 8, color: "rgb(127 127 127)" },
+];
+
+export function MarketAnalyticsDashboard({
+  stocks = STOCKS_DATA,
+}: {
+  stocks?: typeof STOCKS_DATA;
+}) {
+  const [selectedTicker, setSelectedTicker] = useState("NVDA");
+  const [selectedRange, setSelectedRange] = useState("1D");
+
+  const currentStock = stocks.find((s) => s.ticker === selectedTicker) || stocks[0];
+  const isPositive = (currentStock.prices.r1 - currentStock.prices.start) >= 0;
+  const changePct = (((currentStock.prices.r1 - currentStock.prices.start) / currentStock.prices.start) * 100);
+
+  const seriesData = generateSeries(currentStock.startingPrice, isPositive ? 0.015 : -0.012);
+
+  return (
+    <div className="w-full space-y-6 font-mono">
+      {/* Top Split Layout: Featured Stock Area Chart + Allocation Bar */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-px overflow-hidden rounded-sm border border-[#27272a] bg-[#1e1e1e]">
+        {/* Featured Stock Interactive Chart (8 cols) */}
+        <div className="lg:col-span-8 bg-[#09090b] p-6">
+          <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3">
+                <CompanyLogo ticker={currentStock.ticker} size="md" />
+                <div>
+                  <span className="font-display text-xl sm:text-2xl font-bold text-white">
+                    {currentStock.ticker}
+                  </span>
+                  <span className="text-xs text-[#71717a] uppercase ml-2">
+                    {currentStock.name}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-baseline gap-3">
+                <span className="text-3xl sm:text-4xl font-bold text-white tabular-nums">
+                  ${currentStock.startingPrice.toFixed(2)}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-0.5 text-xs font-bold tabular-nums ${
+                    isPositive ? "text-[#10B981]" : "text-[#F43F5E]"
+                  }`}
+                >
+                  {isPositive ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                  {isPositive ? "+" : ""}{changePct.toFixed(2)}%
+                </span>
+              </div>
+
+              <div className="text-[11px] text-[#71717a] mt-1">
+                Sector: {currentStock.sector} • Baseline 100 Shares Float
+              </div>
+            </div>
+
+            {/* Timeframe selector */}
+            <div className="flex items-center gap-1">
+              {["1D", "1W", "1M", "1Y", "ALL"].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setSelectedRange(range)}
+                  className={`px-2.5 py-1 text-[10px] uppercase font-bold rounded-sm transition-colors ${
+                    selectedRange === range
+                      ? "bg-[#FF5F1F] text-black"
+                      : "text-[#71717a] hover:text-white bg-[#030303] border border-[#1e1e1e]"
+                  }`}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* SVG Area Chart */}
+          <div className="mt-6">
+            <PriceChart values={seriesData} positive={isPositive} />
+          </div>
+        </div>
+
+        {/* Portfolio Value & Allocation Breakdown (4 cols) */}
+        <div className="lg:col-span-4 bg-[#09090b] p-6 flex flex-col justify-between">
+          <div>
+            <div className="text-[10px] text-[#71717a] uppercase tracking-widest">
+              Simulated Baseline Capital
+            </div>
+            <div className="mt-2 text-3xl font-bold text-white tabular-nums font-display">
+              $100,000.00
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#10B981]">
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Full Liquidity at Opening Bell</span>
+            </div>
+
+            {/* Sector Diversification Bar */}
+            <div className="mt-6">
+              <div className="text-[10px] text-[#71717a] uppercase tracking-widest mb-2">
+                Optimal Sector Diversification
+              </div>
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-[#1e1e1e]">
+                {ALLOCATION.map((a) => (
+                  <div
+                    key={a.name}
+                    style={{ width: `${a.pct}%`, backgroundColor: a.color }}
+                    className="h-full transition-all"
+                  />
+                ))}
+              </div>
+
+              <ul className="mt-4 space-y-2 text-xs">
+                {ALLOCATION.map((a) => (
+                  <li key={a.name} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-[#d4d4d8]">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: a.color }} />
+                      {a.name}
+                    </span>
+                    <span className="text-[#a1a1aa] font-semibold">{a.pct}%</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-[#1e1e1e] text-[10px] text-[#71717a]">
+            *Diversification mitigates single-stock -30% event shocks.
+          </div>
+        </div>
+      </div>
+
+      {/* Watchlist & Scarcity Float Status Table */}
+      <div className="bg-[#09090b] border border-[#27272a] rounded-sm overflow-hidden">
+        <div className="p-4 border-b border-[#1e1e1e] flex items-center justify-between">
+          <div>
+            <span className="text-xs font-bold text-white uppercase flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#FF5F1F]" />
+              Market Watchlist & Float Depletion Monitor
+            </span>
+          </div>
+          <span className="text-[10px] text-[#71717a] uppercase">
+            Click row to view chart
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-[#1e1e1e] text-[10px] text-[#71717a] uppercase">
+                <th className="px-4 py-2.5 font-medium">Asset</th>
+                <th className="px-4 py-2.5 font-medium">Sector</th>
+                <th className="px-4 py-2.5 text-right font-medium">Price</th>
+                <th className="px-4 py-2.5 text-right font-medium">Expected Δ</th>
+                <th className="px-4 py-2.5 font-medium text-center">Trend (24h)</th>
+                <th className="px-4 py-2.5 text-right font-medium">Float Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#18181b]">
+              {stocks.slice(0, 8).map((stock) => {
+                const isStockUp = (stock.prices.r1 - stock.prices.start) >= 0;
+                const pct = (((stock.prices.r1 - stock.prices.start) / stock.prices.start) * 100);
+                const sparkData = generateSeries(stock.startingPrice, isStockUp ? 0.012 : -0.01);
+                const sparkColor = isStockUp ? "#10B981" : "#F43F5E";
+
+                return (
+                  <tr
+                    key={stock.ticker}
+                    onClick={() => setSelectedTicker(stock.ticker)}
+                    className={`hover:bg-[#18181b] cursor-pointer transition-colors ${
+                      selectedTicker === stock.ticker ? "bg-[#FF5F1F]/10" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <CompanyLogo ticker={stock.ticker} size="sm" />
+                        <div>
+                          <div className="font-bold text-white">{stock.ticker}</div>
+                          <div className="text-[10px] text-[#71717a] truncate max-w-[120px]">
+                            {stock.name}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-[#a1a1aa] text-[11px]">{stock.sector}</td>
+
+                    <td className="px-4 py-3 text-right font-bold text-white">
+                      ${stock.startingPrice.toFixed(2)}
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className={`inline-flex items-center gap-0.5 font-bold ${
+                          isStockUp ? "text-[#10B981]" : "text-[#F43F5E]"
+                        }`}
+                      >
+                        {isStockUp ? "+" : ""}{pct.toFixed(1)}%
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="h-6 w-28 mx-auto">
+                        <Spark values={sparkData} color={sparkColor} />
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20">
+                        100 / 100 Float
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// SVG Area Chart Component
+function PriceChart({ values, positive }: { values: number[]; positive: boolean }) {
+  const w = 700;
+  const h = 180;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = Math.max(0.001, max - min);
+  const stepX = w / (values.length - 1);
+  const pts = values
+    .map((v, i) => `${i * stepX},${h - ((v - min) / range) * (h - 20) - 10}`)
+    .join(" L ");
+  const color = positive ? "#10B981" : "#F43F5E";
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-44 w-full" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75].map((y) => (
+        <line
+          key={y}
+          x1="0"
+          x2={w}
+          y1={h * y}
+          y2={h * y}
+          stroke="rgba(255, 255, 255, 0.06)"
+          strokeDasharray="2 4"
+        />
+      ))}
+      <path d={`M 0,${h} L ${pts} L ${w},${h} Z`} fill="url(#chart-grad)" />
+      <path d={`M ${pts}`} fill="none" stroke={color} strokeWidth="2" />
+    </svg>
+  );
+}
+
+// Inline SVG Sparkline Component
+function Spark({ values, color }: { values: number[]; color: string }) {
+  const w = 120;
+  const h = 24;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = Math.max(0.001, max - min);
+  const stepX = w / (values.length - 1);
+  const pts = values
+    .map((v, i) => `${i * stepX},${h - ((v - min) / range) * (h - 4) - 2}`)
+    .join(" L ");
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-full w-full" preserveAspectRatio="none">
+      <path d={`M ${pts}`} fill="none" stroke={color} strokeWidth="1.75" />
+    </svg>
+  );
+}
