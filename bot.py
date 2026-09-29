@@ -5,8 +5,8 @@ from discord import app_commands
 from discord.ext import commands
 
 # ----------------- CONFIGURATION & MASTER DATA -----------------
-TOKEN = os.getenv("DISCORD_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))  # Optional: For instant slash command sync
+TOKEN = os.getenv("DISCORD_BOT_TOKEN", "MTU1NDQ2MDE0MTkzODU0NDczMQ.G9_Oyj.nJuWCLBArnj0S-PWEFr30I_WcQY0n3yICKt-l8")
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "1554443118101663814"))  # Optional: For instant slash command sync
 
 STARTING_CASH = 100000.0
 MARKET_CAP_FLOAT = 100
