@@ -1,4 +1,4 @@
-import { pgTable, text, integer, numeric, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, bigint, numeric, timestamp, boolean, uuid, jsonb } from "drizzle-orm/pg-core";
 
 export const teams = pgTable("teams", {
   id: text("id").primaryKey(),
@@ -6,6 +6,8 @@ export const teams = pgTable("teams", {
   passcode: text("passcode").notNull(),
   cashBalance: numeric("cash_balance", { precision: 12, scale: 2 }).default("100000.00").notNull(),
   isFrozen: boolean("is_frozen").default(false).notNull(),
+  isReady: boolean("is_ready").default(false).notNull(),
+  peerTradesByRound: jsonb("peer_trades_by_round").$type<Record<number, number>>().default({}).notNull(),
   tableNumber: text("table_number"),
   portfolio: jsonb("portfolio").$type<Record<string, number>>().default({}).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -33,6 +35,10 @@ export const stocks = pgTable("stocks", {
 });
 
 export const gameState = pgTable("game_state", {
+  simulationId: uuid("simulation_id"),
+  simulationSnapshot: jsonb("simulation_snapshot"),
+  revision: bigint("revision", { mode: "number" }).default(0).notNull(),
+  lastWriteToken: uuid("last_write_token"),
   id: integer("id").primaryKey().default(1),
   currentRound: integer("current_round").default(0).notNull(),
   status: text("status").default("SETUP").notNull(), // SETUP, NEWS_RELEASED, TRADING_OPEN, TRADING_CLOSED, FINISHED
@@ -48,6 +54,8 @@ export const gameState = pgTable("game_state", {
 });
 
 export const directSellOffers = pgTable("direct_sell_offers", {
+  simulationId: uuid("simulation_id"),
+  roundNumber: integer("round_number"),
   id: text("id").primaryKey(),
   sellerTeamId: text("seller_team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
   sellerTeamName: text("seller_team_name").notNull(),
@@ -63,6 +71,8 @@ export const directSellOffers = pgTable("direct_sell_offers", {
 });
 
 export const swapOffers = pgTable("swap_offers", {
+  simulationId: uuid("simulation_id"),
+  roundNumber: integer("round_number"),
   id: text("id").primaryKey(),
   senderTeamId: text("sender_team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
   receiverTeamId: text("receiver_team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
@@ -76,6 +86,11 @@ export const swapOffers = pgTable("swap_offers", {
 });
 
 export const transactions = pgTable("transactions", {
+  simulationId: uuid("simulation_id"),
+  grossTotal: numeric("gross_total", { precision: 12, scale: 2 }),
+  commissionAmount: numeric("commission_amount", { precision: 12, scale: 2 }),
+  commissionPercent: numeric("commission_percent"),
+  displayTimestamp: text("display_timestamp"),
   id: text("id").primaryKey(),
   roundNumber: integer("round_number").notNull(),
   teamId: text("team_id").references(() => teams.id, { onDelete: "cascade" }).notNull(),
