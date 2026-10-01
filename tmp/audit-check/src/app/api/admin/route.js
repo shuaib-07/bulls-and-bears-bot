@@ -54,13 +54,10 @@ async function execute(request) {
             }
             state.marketSellCommissionEnabled = payload.enabled;
             state.marketSellCommissionPercent = percent;
-            return server_1.NextResponse.json({ success: true, message: `Market-sale commission ${payload.enabled ? `set to ${percent}%` : "disabled"}. Direct trades and swaps are exempt.`, state });
+            return server_1.NextResponse.json({ success: true, message: `Market-sale commission ${payload.enabled ? `set to ${percent}%` : "disabled"}. Share swaps are exempt.`, state });
         }
         if (action === "SET_NEGOTIATED_PRICES") {
-            if (typeof payload?.enabled !== "boolean")
-                return server_1.NextResponse.json({ error: "Choose whether negotiated prices are enabled." }, { status: 400 });
-            state.negotiatedPricesEnabled = payload.enabled;
-            return server_1.NextResponse.json({ success: true, message: `Negotiated prices ${payload.enabled ? "enabled" : "disabled"} for new direct offers. Existing offers retain their agreed price.`, state });
+            return server_1.NextResponse.json({ error: "Direct sales and negotiated sale prices are disabled." }, { status: 403 });
         }
         if (action === "SET_MARKET_SELL_LOCK") {
             if (typeof payload?.enabled !== "boolean") {

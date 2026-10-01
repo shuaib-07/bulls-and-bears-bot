@@ -13,8 +13,8 @@ export function FAQSection() {
       a: "Every stock in the simulation begins with a maximum market float of exactly 100 shares. When teams buy shares from the market, the available float decreases. Once it hits 0, nobody can buy that stock from the market anymore. The only way to acquire it is through direct Player-to-Player (P2P) Bilateral Swaps.",
     },
     {
-      q: "How do Player-to-Player (P2P) Bilateral Swaps & Direct Sales work?",
-      a: "If another team holds a stock you want or you wish to sell directly to a rival team, you can propose direct trades or bilateral swaps from your terminal. The recipient receives an instant countdown modal on their screen and has a strict timed window to accept or decline. Counterparties must act before market conditions shift.",
+      q: "How do stock swaps and market sales work?",
+      a: "Teams can exchange stocks with other teams only through bilateral share swaps. The receiving team has a timed window to accept or decline. Stock sales go only to the market at its current price, with the configured commission. When the host enables the market-sale lock, each team must complete two accepted swaps that round before selling to the market.",
     },
     {
       q: "Are the news flashes real or fictional?",

@@ -65,7 +65,8 @@ function getInitialGameState() {
         marketSellLockEnabled: true,
         marketSellCommissionEnabled: true,
         marketSellCommissionPercent: 5,
-        negotiatedPricesEnabled: true,
+        negotiatedPricesEnabled: false,
+        peerTradeRule: "SWAPS_ONLY",
         scoresAnnouncement: null,
         stockPrices,
         stockFloats,
@@ -87,7 +88,7 @@ function getGameState() {
     state.marketSellLockEnabled ??= true;
     state.marketSellCommissionEnabled ??= true;
     state.marketSellCommissionPercent ??= 5;
-    state.negotiatedPricesEnabled ??= true;
+    state.negotiatedPricesEnabled = false;
     const teamsByName = new Map(Object.values(state.teams).map((team) => [team.teamName, team]));
     // Migrate older name-only records and remove records belonging to deleted teams.
     state.transactions = state.transactions.filter((tx) => {
@@ -124,17 +125,22 @@ function getGameState() {
             return false;
         offer.sellerTeamName = seller.teamName;
         offer.buyerTeamName = buyer.teamName;
-        if (offer.status === "PENDING" && offer.round !== undefined && offer.round !== state.currentRound)
+        if (offer.status === "PENDING")
             offer.status = "CANCELLED";
         return true;
     });
-    // Preserve credit for completed peer trades in sessions created before this rule.
+    // Migrate the previous direct-sale credits to completed share swaps only.
+    if (state.peerTradeRule !== "SWAPS_ONLY") {
+        Object.values(state.teams).forEach((team) => { delete team.peerTradesByRound; });
+        state.peerTradeRule = "SWAPS_ONLY";
+    }
+    // Historical direct sales used SWAP as their type; actual swaps have both legs in the ticker.
     Object.values(state.teams).forEach((team) => {
         if (team.peerTradesByRound)
             return;
         team.peerTradesByRound = {};
         state.transactions.forEach((tx) => {
-            if ((tx.type === "SWAP" || tx.type === "DIRECT_SELL") && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
+            if ((tx.type === "SWAP" && tx.ticker.includes("⇄")) && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
                 (0, peer_trades_1.recordPeerTrade)(team, tx.round);
             }
         });

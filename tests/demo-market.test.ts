@@ -26,22 +26,23 @@ async function run() {
   assert.equal((await command("/api/trade", { action: "SELL", ticker: "LUMA-X", quantity: 2, targetTeamId: "MARKET_POOL" })).status, 400);
   market.gameState.marketSellLockEnabled = false;
   assert.equal((await command("/api/trade", { action: "SELL", ticker: "LUMA-X", quantity: 2, targetTeamId: "MARKET_POOL" })).status, 200);
-  assert.equal((await command("/api/trade", { action: "SELL", ticker: "BRIK-X", quantity: 1, targetTeamId: "practice-moss" })).status, 200);
+  assert.equal((await command("/api/trade", { action: "SELL", ticker: "BRIK-X", quantity: 1, targetTeamId: "practice-moss" })).status, 400);
   assertSupply();
 
   assert.equal((await command("/api/swap", { action: "PROPOSE", receiverId: "practice-comet", giveTicker: "LUMA-X", giveQty: 1, receiveTicker: "RILL-X", receiveQty: 2 })).status, 200);
   assert.equal((await command("/api/swap", { action: "PROPOSE", receiverId: "practice-comet", giveTicker: "LUMA-X", giveQty: 999, receiveTicker: "RILL-X", receiveQty: 2 })).status, 400);
   addDemoOffers(market);
   assert.equal((await command("/api/swap", { action: "ACCEPT", swapId: market.swaps[0].id })).status, 200);
-  assert.equal((await command("/api/trade", { action: "ACCEPT_DIRECT_SELL", offerId: market.directSellOffers[0].id })).status, 200);
+  assert.deepEqual((await read()).directSellOffers, []);
+  assert.equal((await command("/api/trade", { action: "ACCEPT_DIRECT_SELL", offerId: "old-offer" })).status, 400);
   addDemoOffers(market);
   assert.equal((await command("/api/swap", { action: "REJECT", swapId: market.swaps[1].id })).status, 200);
-  assert.equal((await command("/api/trade", { action: "REJECT_DIRECT_SELL", offerId: market.directSellOffers[1].id })).status, 200);
+  assert.equal((await command("/api/trade", { action: "REJECT_DIRECT_SELL", offerId: "old-offer" })).status, 400);
   assertSupply();
 
   addDemoOffers(market);
-  market.directSellOffers.at(-1)!.expiresAt = 0;
-  assert.equal((await command("/api/trade", { action: "ACCEPT_DIRECT_SELL", offerId: market.directSellOffers.at(-1)!.id })).status, 400);
+  market.swaps.at(-1)!.expiresAt = 0;
+  assert.equal((await command("/api/swap", { action: "ACCEPT", swapId: market.swaps.at(-1)!.id })).status, 400);
   applyDemoPriceMove(market);
   assert.notEqual((await read()).activeTeam.pnl, 0);
   assert.equal(JSON.stringify(independentMarket), unchanged);

@@ -554,10 +554,10 @@ export function PinnedHeroStage() {
                 <div className="p-5 flex-1 flex flex-col justify-end z-20">
                   <span className="text-[10px] font-mono tracking-widest text-[var(--muted)] uppercase font-medium mb-1">03</span>
                   <h4 className="text-base font-bold text-[var(--fg)] mb-1 group-hover:text-white transition-colors">
-                    P2P Swaps & 120s Direct Sales
+                    Share Swaps & Market Sales
                   </h4>
                   <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-                    Propose bilateral equity swaps and direct team offers with live 120-second collision safeguards.
+                    Swap shares with other teams or sell back to the market, subject to the host's sale lock and commission.
                   </p>
                 </div>
                 <div className="absolute bottom-0 left-0 w-full h-[1px] bg-[#10B981] scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />

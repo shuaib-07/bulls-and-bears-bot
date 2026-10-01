@@ -48,7 +48,7 @@ async function run() {
     const { GET: read } = require('../tmp/audit-check/src/app/api/state/route');
     const cookies = {};
     const request = (body) => new Request('http://localhost/api/test', {method:'POST',headers: cookies[body.teamId] ? {cookie: cookies[body.teamId]} : {},body:JSON.stringify(body)});
-    const command = (action,payload={}) => admin(request({pin:'9988',action,payload}));
+    const command = (action,payload={}) => admin(request({pin:process.env.ADMIN_PIN || '9988',action,payload}));
     let result = await command('OPEN_TRADING');
     assert.equal(result.status,200,JSON.stringify(await result.clone().json()));
     const simulationId = memory.simulationId;
@@ -74,25 +74,23 @@ async function run() {
     assert.equal((await sql.query(`SELECT available_supply FROM "${schema}".stocks WHERE ticker='AAPL'`))[0].available_supply,0);
     const buyer = Object.values(saved.teams).find(t=>t.id!==winner.id);
     assert.equal((await trade(new Request('http://localhost/api/trade', {method:'POST', headers:{cookie:cookies[buyer.id]}, body:JSON.stringify({simulationId,action:'BUY',teamId:winner.id,ticker:'AAPL',quantity:1})}))).status,401);
-    assert.equal((await trade(request({simulationId,action:'SELL',teamId:winner.id,targetTeamId:buyer.id,ticker:'AAPL',quantity:1,pricePerShare:12.345}))).status,400);
-    const offer = await trade(request({simulationId,action:'SELL',teamId:winner.id,targetTeamId:buyer.id,ticker:'AAPL',quantity:1,pricePerShare:12.34}));
-    assert.equal(offer.status,200,JSON.stringify(await offer.clone().json()));
-    const offerId = (await offer.json()).offer.id;
-    assert.equal((await command('SET_NEGOTIATED_PRICES',{enabled:false})).status,200);
-    assert.equal((await trade(request({simulationId,action:'SELL',teamId:winner.id,targetTeamId:buyer.id,ticker:'AAPL',quantity:1,pricePerShare:12.34}))).status,409);
-    const accepted = await trade(request({simulationId,action:'ACCEPT_DIRECT_SELL',teamId:buyer.id,offerId}));
-    assert.equal(accepted.status,200);
-    assert.equal((await trade(request({simulationId,action:'ACCEPT_DIRECT_SELL',teamId:buyer.id,offerId}))).status,400);
-    assert.equal((await trade(request({simulationId,action:'BUY',teamId:winner.id,ticker:'MSFT',quantity:1}))).status,200);
-    const proposed = await swap(request({simulationId,action:'PROPOSE',teamId:winner.id,senderId:winner.id,receiverId:buyer.id,giveTicker:'MSFT',giveQty:1,receiveTicker:'AAPL',receiveQty:1}));
+    assert.equal((await trade(request({simulationId,action:'SELL',teamId:winner.id,targetTeamId:buyer.id,ticker:'AAPL',quantity:1,pricePerShare:12.34}))).status,403);
+    assert.equal((await trade(request({simulationId,action:'ACCEPT_DIRECT_SELL',teamId:buyer.id,offerId:'old-offer'}))).status,403);
+    assert.equal((await command('SET_NEGOTIATED_PRICES',{enabled:true})).status,403);
+    assert.equal((await trade(request({simulationId,action:'BUY',teamId:buyer.id,ticker:'MSFT',quantity:2}))).status,200);
+    const proposed = await swap(request({simulationId,action:'PROPOSE',teamId:winner.id,senderId:winner.id,receiverId:buyer.id,giveTicker:'AAPL',giveQty:1,receiveTicker:'MSFT',receiveQty:1}));
     assert.equal(proposed.status,200);
     const swapId = (await proposed.json()).swap.id;
     const swapResponses = await Promise.all([1,2].map(() => swap(request({simulationId,action:'ACCEPT',teamId:buyer.id,swapId}))));
     assert.equal(swapResponses.filter(response=>response.status===200).length,1);
     assert.equal(swapResponses.filter(response=>response.status===400).length,1);
-    await command('SET_MARKET_SELL_LOCK',{enabled:false});
+    assert.equal((await trade(request({simulationId,action:'SELL',teamId:buyer.id,targetTeamId:'MARKET_POOL',ticker:'AAPL',quantity:1}))).status,403);
+    const second = await swap(request({simulationId,action:'PROPOSE',teamId:winner.id,senderId:winner.id,receiverId:buyer.id,giveTicker:'AAPL',giveQty:1,receiveTicker:'MSFT',receiveQty:1}));
+    assert.equal(second.status,200);
+    assert.equal((await swap(request({simulationId,action:'ACCEPT',teamId:buyer.id,swapId:(await second.json()).swap.id}))).status,200);
+
     await command('SET_MARKET_SELL_COMMISSION',{enabled:true,percent:2.5});
-    const sale = await trade(request({simulationId,action:'SELL',teamId:buyer.id,targetTeamId:'MARKET_POOL',ticker:'MSFT',quantity:1}));
+    const sale = await trade(request({simulationId,action:'SELL',teamId:buyer.id,targetTeamId:'MARKET_POOL',ticker:'AAPL',quantity:1}));
     assert.equal(sale.status,200);
     let database = (await sql.query(`SELECT simulation_snapshot FROM "${schema}".game_state WHERE id=1`))[0].simulation_snapshot;
     assert.equal(database.marketSellCommissionPercent,2.5);
@@ -110,7 +108,7 @@ async function run() {
     assert.equal((await command('EXTEND_TIMER',{minutes:1})).status,409);
     const state = await (await read(new Request('http://localhost/api/state'))).json();
     assert.equal(state.gameState.simulationId,database.simulationId);
-    console.log('Neon integration passed: ten concurrent buyers, one complete fill, persisted balances/supply/audits, negotiated sales, commission, duplicate acceptance, reset isolation, and saved admin controls.');
+    console.log('Neon integration passed: ten concurrent buyers, one complete fill, persisted balances/supply/audits, direct-sale rejection, two-swap unlock, commission, duplicate acceptance, reset isolation, and saved admin controls.');
   } finally {
     assert.match(schema,/^bb_verify_[a-f0-9]{16}$/);
     await sql.query(`DROP SCHEMA "${schema}" CASCADE`);

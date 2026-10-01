@@ -27,18 +27,17 @@ async function run() {
   assert.equal((await sell("a", "")).status, 403);
   assert.equal(JSON.stringify(state.teams.a), before);
 
-  let response = await (await sell("a", "b")).json();
+  assert.equal((await sell("a", "b")).status, 403);
   assert.equal(count("a"), 0);
-  assert.equal((await trade(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "c", offerId: response.offer.id }))).status, 403);
-  await trade(request("trade", { action: "REJECT_DIRECT_SELL", teamId: "b", offerId: response.offer.id }));
-  assert.equal((await trade(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "b", offerId: response.offer.id }))).status, 400);
+  assert.equal(state.directSellOffers.length, 0);
+  assert.equal((await trade(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "b", offerId: "old-offer" }))).status, 403);
+  assert.equal((await command("SET_NEGOTIATED_PRICES", { enabled: true })).status, 403);
+  const firstProposal = await (await swap(request("swap", { action: "PROPOSE", teamId: "b", senderId: "b", receiverId: "a", giveTicker: "MSFT", giveQty: 1, receiveTicker: "AAPL", receiveQty: 1 }))).json();
   assert.equal(count("a"), 0);
-
-  response = await (await sell("a", "b")).json();
-  assert.equal((await trade(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "b", offerId: response.offer.id }))).status, 200);
+  assert.equal((await swap(request("swap", { action: "ACCEPT", teamId: "a", swapId: firstProposal.swap.id }))).status, 200);
   assert.equal(count("a"), 1);
   assert.equal(count("b"), 1);
-  assert.equal((await trade(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "b", offerId: response.offer.id }))).status, 400);
+  assert.equal((await swap(request("swap", { action: "ACCEPT", teamId: "a", swapId: firstProposal.swap.id }))).status, 400);
   assert.equal(count("a"), 1);
   assert.equal((await sell("a")).status, 403);
 

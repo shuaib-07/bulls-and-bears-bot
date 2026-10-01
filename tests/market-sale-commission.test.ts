@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { getGameState, getInitialGameState } from "../src/lib/db";
 import { POST as admin } from "../src/app/api/admin/route";
 import { POST as trade } from "../src/app/api/trade/route";
+import { POST as swap } from "../src/app/api/swap/route";
 import { calculateMarketSale } from "../src/lib/market-sale";
 
 async function run() {
   const state = getGameState();
   Object.assign(state, getInitialGameState());
   state.teams.a = { id: "a", teamName: "Seller", passcode: "1234", cashBalance: 1000, portfolio: { AAPL: 20 }, isFrozen: false };
-  state.teams.b = { id: "b", teamName: "Buyer", passcode: "2345", cashBalance: 1000, portfolio: {}, isFrozen: false };
+  state.teams.b = { id: "b", teamName: "Buyer", passcode: "2345", cashBalance: 1000, portfolio: { MSFT: 2 }, isFrozen: false };
   state.stockPrices.AAPL = 100;
   state.stockFloats.AAPL = 80;
   const request = (body: object) => new Request("http://localhost/api/test", { method: "POST", body: JSON.stringify({ simulationId: state.simulationId, ...body }) });
@@ -28,10 +29,11 @@ async function run() {
   assert.deepEqual(result.sale, { grossTotal: 200, commissionAmount: 5, netTotal: 195 });
   assert.equal(state.teams.a.cashBalance, 1575);
 
-  const offer = await (await sell(1, "b")).json();
-  assert.equal((await trade(request({ teamId: "b", action: "ACCEPT_DIRECT_SELL", offerId: offer.offer.id }))).status, 200);
-  assert.equal(state.teams.a.cashBalance, 1675);
-  assert.equal(state.teams.b.cashBalance, 900);
+  assert.equal((await sell(1, "b")).status, 403);
+  const proposal = await (await swap(request({ action: "PROPOSE", teamId: "a", senderId: "a", receiverId: "b", giveTicker: "AAPL", giveQty: 1, receiveTicker: "MSFT", receiveQty: 1 }))).json();
+  assert.equal((await swap(request({ teamId: "b", action: "ACCEPT", swapId: proposal.swap.id }))).status, 200);
+  assert.equal(state.teams.a.cashBalance, 1575);
+  assert.equal(state.teams.b.cashBalance, 1000);
   assert.equal(state.transactions.at(-1)?.commissionAmount, undefined);
   await command("SET_MARKET_SELL_COMMISSION", { enabled: false, percent: 2.5 });
   assert.equal((await (await sell(1)).json()).sale.netTotal, 100);

@@ -21,8 +21,8 @@ export function RulesSection() {
     },
     {
       step: "03",
-      title: "Bilateral P2P Swaps & Direct Sales",
-      desc: "Negotiate stock-for-stock trades or direct OTC sales with other teams. No cash combos, no multi-party trades, and NO algorithmic valuation. The value is strictly whatever you negotiate.",
+      title: "Share Swaps & Market Sales",
+      desc: "Exchange stocks with other teams through share-for-share swaps only. Sales go back to the market at its current price and configured commission. When enabled, the market-sale lock requires two accepted swaps per team each round. No cash payments between teams or multi-party trades.",
       icon: ArrowLeftRight,
       accent: "#10B981",
     },

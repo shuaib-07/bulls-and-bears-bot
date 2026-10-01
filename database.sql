@@ -1,8 +1,6 @@
 CREATE SCHEMA "public";
 CREATE SCHEMA "neon_auth";
 CREATE TABLE "direct_sell_offers" (
-	"round_number" integer,
-	"simulation_id" uuid,
 	"id" text PRIMARY KEY,
 	"seller_team_id" text NOT NULL,
 	"seller_team_name" text NOT NULL,
@@ -14,14 +12,12 @@ CREATE TABLE "direct_sell_offers" (
 	"total" numeric(12, 2) NOT NULL,
 	"status" text DEFAULT 'PENDING' NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"simulation_id" uuid,
+	"round_number" integer
 );
 CREATE TABLE "game_state" (
 	"id" integer PRIMARY KEY DEFAULT 1,
-	"simulation_snapshot" jsonb,
-	"revision" bigint DEFAULT 0 NOT NULL,
-	"last_write_token" uuid,
-	"simulation_id" uuid,
 	"current_round" integer DEFAULT 0 NOT NULL,
 	"status" text DEFAULT 'SETUP' NOT NULL,
 	"trading_expires_at" timestamp with time zone,
@@ -32,7 +28,11 @@ CREATE TABLE "game_state" (
 	"stock_floats" jsonb DEFAULT '{}' NOT NULL,
 	"custom_scenarios" jsonb DEFAULT '{}' NOT NULL,
 	"custom_price_shifts" jsonb DEFAULT '{}' NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"simulation_snapshot" jsonb,
+	"revision" bigint DEFAULT 0 NOT NULL,
+	"last_write_token" uuid,
+	"simulation_id" uuid
 );
 CREATE TABLE "stocks" (
 	"ticker" text PRIMARY KEY,
@@ -45,8 +45,6 @@ CREATE TABLE "stocks" (
 	"is_active" boolean DEFAULT true NOT NULL
 );
 CREATE TABLE "swap_offers" (
-	"round_number" integer,
-	"simulation_id" uuid,
 	"id" text PRIMARY KEY,
 	"sender_team_id" text NOT NULL,
 	"receiver_team_id" text NOT NULL,
@@ -56,7 +54,9 @@ CREATE TABLE "swap_offers" (
 	"receive_quantity" integer NOT NULL,
 	"status" text DEFAULT 'PENDING' NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"simulation_id" uuid,
+	"round_number" integer
 );
 CREATE TABLE "team_members" (
 	"id" text PRIMARY KEY,
@@ -73,14 +73,13 @@ CREATE TABLE "teams" (
 	"passcode" text NOT NULL,
 	"cash_balance" numeric(12, 2) DEFAULT '100000.00' NOT NULL,
 	"is_frozen" boolean DEFAULT false NOT NULL,
-	"is_ready" boolean DEFAULT false NOT NULL,
-	"peer_trades_by_round" jsonb DEFAULT '{}' NOT NULL,
 	"table_number" text,
 	"portfolio" jsonb DEFAULT '{}' NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"is_ready" boolean DEFAULT false NOT NULL,
+	"peer_trades_by_round" jsonb DEFAULT '{}' NOT NULL
 );
 CREATE TABLE "transactions" (
-	"simulation_id" uuid,
 	"id" text PRIMARY KEY,
 	"round_number" integer NOT NULL,
 	"team_id" text NOT NULL,
@@ -90,13 +89,14 @@ CREATE TABLE "transactions" (
 	"quantity" integer NOT NULL,
 	"price_per_share" numeric(10, 2) NOT NULL,
 	"total_amount" numeric(12, 2) NOT NULL,
+	"counterparty_team_id" text,
+	"counterparty_team_name" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"simulation_id" uuid,
 	"gross_total" numeric(12, 2),
 	"commission_amount" numeric(12, 2),
 	"commission_percent" numeric,
-	"display_timestamp" text,
-	"counterparty_team_id" text,
-	"counterparty_team_name" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"display_timestamp" text
 );
 CREATE TABLE "neon_auth"."account" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

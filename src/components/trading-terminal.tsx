@@ -1533,7 +1533,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
               {gameState?.marketSellLockEnabled ? (
                 <p className="mt-1">
                   Round {gameState.currentRound}: {peerTradeCount}/{REQUIRED_PEER_TRADES} qualifying accepted swaps.
-                  {marketSellLocked ? ` Complete ${REQUIRED_PEER_TRADES - peerTradeCount} more direct trade(s) or accepted swap(s) to unlock market sales.` : " Market sales are unlocked for your team."}
+                  {marketSellLocked ? ` Complete ${REQUIRED_PEER_TRADES - peerTradeCount} more accepted swap(s) to unlock market sales.` : " Market sales are unlocked for your team."}
                   {" "}Market buys are allowed and do not count toward unlocking.
                 </p>
               ) : <p className="mt-1">You can sell to the market freely while trading is open.</p>}

@@ -45,7 +45,7 @@ function createDemoMarket() {
                 ],
             },
             status: "TRADING_OPEN", tradingExpiresAt: null,
-            marketExpanded: false, leaderboardVisible: false, serverTime: Date.now(), marketSellLockEnabled: true, marketSellCommissionEnabled: true, marketSellCommissionPercent: 2.5, negotiatedPricesEnabled: true,
+            marketExpanded: false, leaderboardVisible: false, serverTime: Date.now(), marketSellLockEnabled: true, marketSellCommissionEnabled: true, marketSellCommissionPercent: 2.5, negotiatedPricesEnabled: false,
         },
         transactions: [],
         swaps: [],
@@ -78,27 +78,9 @@ function requestDemo(market, url, init) {
     }
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
     if (path === "/api/trade") {
-        if (["ACCEPT_DIRECT_SELL", "REJECT_DIRECT_SELL", "CANCEL_DIRECT_SELL"].includes(body.action)) {
-            const offer = market.directSellOffers.find((entry) => entry.id === body.offerId);
-            if (!offer || offer.status !== "PENDING" || offer.expiresAt <= Date.now())
-                return fail("This practice offer is no longer available.");
-            if (body.action !== "ACCEPT_DIRECT_SELL") {
-                offer.status = body.action === "CANCEL_DIRECT_SELL" ? "CANCELLED" : "REJECTED";
-                return ok();
-            }
-            const seller = market.teams[offer.sellerTeamId];
-            if (team.cashBalance < offer.total || (seller.portfolio[offer.ticker] || 0) < offer.quantity)
-                return fail("Not enough cash or shares to complete this practice offer.");
-            team.cashBalance -= offer.total;
-            seller.cashBalance += offer.total;
-            seller.portfolio[offer.ticker] -= offer.quantity;
-            team.portfolio[offer.ticker] = (team.portfolio[offer.ticker] || 0) + offer.quantity;
-            offer.status = "ACCEPTED";
-            (0, peer_trades_1.recordPeerTrade)(team, 1);
-            (0, peer_trades_1.recordPeerTrade)(seller, 1);
-            record("BUY", offer.ticker, offer.quantity, offer.price, seller.teamName);
-            return ok();
-        }
+        if (["ACCEPT_DIRECT_SELL", "REJECT_DIRECT_SELL", "CANCEL_DIRECT_SELL"].includes(body.action) ||
+            (body.action === "SELL" && body.targetTeamId && body.targetTeamId !== "MARKET_POOL"))
+            return fail("Direct sales between teams are disabled. Sell to the market or swap shares.");
         const stock = market.stocks.find((entry) => entry.ticker === body.ticker);
         const qty = Number(body.quantity);
         if (!stock || !Number.isInteger(qty) || qty <= 0)
@@ -118,35 +100,19 @@ function requestDemo(market, url, init) {
         if (body.action === "SELL") {
             if ((team.portfolio[stock.ticker] || 0) < qty)
                 return fail("You can only sell practice shares you own.");
-            const buyer = market.teams[body.targetTeamId];
-            if (body.targetTeamId !== "MARKET_POOL" && !buyer)
-                return fail("Choose a practice buyer.");
-            if (buyer && body.pricePerShare !== undefined && !(0, market_sale_1.isValidPeerPrice)(body.pricePerShare))
-                return fail("Enter a positive offer price with up to two decimal places.");
-            const price = buyer && market.gameState.negotiatedPricesEnabled && body.pricePerShare !== undefined ? body.pricePerShare : stock.currentPrice;
-            const offerTotal = Math.round(price * qty * 100) / 100;
-            if (buyer && offerTotal > buyer.cashBalance)
-                return fail("That practice bot does not have enough cash.");
-            if (!buyer && market.gameState.marketSellLockEnabled && (0, peer_trades_1.getPeerTradeCount)(team, 1) < peer_trades_1.REQUIRED_PEER_TRADES)
-                return fail("Complete two practice trades with other teams to unlock market sales, or turn off the practice sale lock.");
+            if (market.gameState.marketSellLockEnabled && (0, peer_trades_1.getPeerTradeCount)(team, 1) < peer_trades_1.REQUIRED_PEER_TRADES)
+                return fail("Complete two accepted practice swaps to unlock market sales, or turn off the practice sale lock.");
+            const price = stock.currentPrice;
+            const percent = market.gameState.marketSellCommissionEnabled ? market.gameState.marketSellCommissionPercent : 0;
+            const sale = (0, market_sale_1.calculateMarketSale)(price, qty, percent);
             team.portfolio[stock.ticker] -= qty;
             if (!team.portfolio[stock.ticker])
                 delete team.portfolio[stock.ticker];
-            const percent = !buyer && market.gameState.marketSellCommissionEnabled ? market.gameState.marketSellCommissionPercent : 0;
-            const sale = (0, market_sale_1.calculateMarketSale)(price, qty, percent);
             team.cashBalance = Number((team.cashBalance + sale.netTotal).toFixed(2));
-            if (buyer) {
-                buyer.cashBalance = Number((buyer.cashBalance - offerTotal).toFixed(2));
-                buyer.portfolio[stock.ticker] = (buyer.portfolio[stock.ticker] || 0) + qty;
-                (0, peer_trades_1.recordPeerTrade)(team, 1);
-                (0, peer_trades_1.recordPeerTrade)(buyer, 1);
-            }
-            else
-                stock.availableSupply += qty;
-            record("SELL", stock.ticker, qty, price, buyer?.teamName);
-            if (!buyer)
-                Object.assign(market.transactions[0], { grossTotal: sale.grossTotal, commissionAmount: sale.commissionAmount, commissionPercent: percent, total: sale.netTotal });
-            return ok({ sale, message: buyer ? "Practice bot accepted your direct sale. Shares and cash updated." : `Practice market sale complete. Commission: $${sale.commissionAmount.toFixed(2)}; net received: $${sale.netTotal.toFixed(2)}.` });
+            stock.availableSupply += qty;
+            record("SELL", stock.ticker, qty, price);
+            Object.assign(market.transactions[0], { grossTotal: sale.grossTotal, commissionAmount: sale.commissionAmount, commissionPercent: percent, total: sale.netTotal });
+            return ok({ sale, message: `Practice market sale complete. Commission: $${sale.commissionAmount.toFixed(2)}; net received: $${sale.netTotal.toFixed(2)}.` });
         }
     }
     if (path === "/api/swap") {
@@ -197,7 +163,6 @@ function requestDemo(market, url, init) {
 function addDemoOffers(market) {
     const bot = market.teams["practice-comet"];
     market.swaps.push({ id: `practice-swap-${++market.sequence}`, senderId: bot.id, senderTeam: bot.teamName, receiverId: exports.DEMO_TEAM_ID, receiverTeam: market.teams[exports.DEMO_TEAM_ID].teamName, giveTicker: "RILL-X", giveQty: 2, receiveTicker: "LUMA-X", receiveQty: 1, status: "PENDING", expiresAt: Date.now() + 60000 });
-    market.directSellOffers.push({ id: `practice-offer-${++market.sequence}`, sellerTeamId: bot.id, sellerTeamName: bot.teamName, buyerTeamId: exports.DEMO_TEAM_ID, buyerTeamName: market.teams[exports.DEMO_TEAM_ID].teamName, ticker: "POD-X", quantity: 2, price: 58, total: 116, status: "PENDING", expiresAt: Date.now() + 120000 });
 }
 function applyDemoPriceMove(market) {
     const changes = [12, -7, 3, -9, 5, 8];
