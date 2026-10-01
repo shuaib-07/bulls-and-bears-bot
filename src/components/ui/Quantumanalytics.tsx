@@ -42,11 +42,11 @@ export const CAMPAIGNS = [
 
 export function KpiCard({ title, value, subValue, trend, trendVal, isCurrency = false }: any) {
     return (
-    <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-sm flex flex-col justify-between h-28 hover:border-zinc-700 transition-colors">
-        <div className="flex justify-between items-start">
-            <span className="text-zinc-400 text-xs font-mono uppercase tracking-wider">{title}</span>
+    <div className="min-w-0 bg-zinc-900 border border-zinc-800 p-3 sm:p-4 rounded-sm flex flex-col justify-between gap-2 min-h-28 hover:border-zinc-700 transition-colors">
+        <div className="flex flex-col sm:flex-row gap-1 sm:justify-between items-start">
+            <span className="text-zinc-400 text-[10px] sm:text-xs font-mono uppercase tracking-wider">{title}</span>
             <span className={cn(
-                "text-xs font-mono px-1.5 py-0.5 rounded-sm flex items-center gap-1",
+                "max-w-full break-words text-[10px] sm:text-xs font-mono px-1.5 py-0.5 rounded-sm flex items-center gap-1",
                 trend === 'up' ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10"
             )}>
                 {trend === 'up' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
@@ -54,10 +54,10 @@ export function KpiCard({ title, value, subValue, trend, trendVal, isCurrency = 
             </span>
         </div>
         <div>
-            <div className="text-3xl font-mono font-medium text-zinc-100 tracking-tight">
+            <div className="text-lg min-[360px]:text-xl sm:text-3xl break-words font-mono font-medium text-zinc-100 tracking-tight">
                 {isCurrency ? "$" : ""}{value}
             </div>
-            <div className="text-xs text-zinc-400 font-mono mt-1">
+            <div className="text-[10px] sm:text-xs text-zinc-400 font-mono mt-1 break-words">
                 <span className="text-zinc-300">{subValue}</span>
             </div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { ScoresAnnouncement } from "@/src/lib/final-scores";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -72,10 +73,16 @@ export default function AdminControlCenter() {
   const [stocks, setStocks] = useState<any[]>([]);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const resetDialogRef = useRef<HTMLDialogElement>(null);
+  const [commissionDraft, setCommissionDraft] = useState("5");
   const [activeSection, setActiveSection] = useState<string>("phase-engine");
   const [timeRemaining, setTimeRemaining] = useState<string>("00:00");
 
   // Cash adjust modal
+  useEffect(() => {
+    if (gameState?.marketSellCommissionPercent !== undefined) setCommissionDraft(String(gameState.marketSellCommissionPercent));
+  }, [gameState?.marketSellCommissionPercent]);
+
   const [adjustModalTeam, setAdjustModalTeam] = useState<any | null>(null);
   const [customCashDelta, setCustomCashDelta] = useState<string>("5000");
 
@@ -188,7 +195,8 @@ export default function AdminControlCenter() {
         sounds.playTradeSuccess();
       }
 
-      fetchState();
+      await fetchState();
+      return true;
     } catch (e) {
       setActionStatus("❌ Network error executing admin command.");
     } finally {
@@ -198,7 +206,7 @@ export default function AdminControlCenter() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#030303] flex items-center justify-center p-4 font-mono cyber-grid">
+      <div className="responsive-page min-h-screen bg-[#030303] flex items-center justify-center p-4 font-mono cyber-grid">
         <div className="w-full max-w-sm bg-[#09090b] border border-[#27272a] p-6 rounded-xl shadow-2xl space-y-4">
           <div className="flex items-center gap-2.5 text-[#FF5F1F]">
             <div className="w-8 h-8 rounded-lg bg-[#FF5F1F]/15 border border-[#FF5F1F]/40 flex items-center justify-center">
@@ -254,6 +262,8 @@ export default function AdminControlCenter() {
   }
 
   const currentRound = gameState?.currentRound || 0;
+  const announcement = gameState?.scoresAnnouncement as ScoresAnnouncement | null | undefined;
+  const nextScore = announcement?.teams[announcement.teams.length - announcement.revealedCount - 1];
   const filteredStocks = stocks.filter(
     (s) =>
       s.ticker.toLowerCase().includes(stockSearchQuery.toLowerCase()) ||
@@ -262,12 +272,12 @@ export default function AdminControlCenter() {
   );
 
   return (
-    <div className="min-h-screen bg-[#030303] text-[#fafafa] font-mono">
+    <div className="responsive-page min-h-screen bg-[#030303] text-[#fafafa] font-mono">
       {/* ========================================================================= */}
       {/* TOP STICKY COMMAND BAR                                                    */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-[#09090b]/95 backdrop-blur-xl border-b border-[#1e1e1e] px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 shrink-0">
+      <header className="sticky top-0 z-40 bg-[#09090b]/95 backdrop-blur-xl border-b border-[#1e1e1e] px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-[#FF5F1F]/15 border border-[#FF5F1F]/50 flex items-center justify-center text-[#FF5F1F] shadow-[0_0_15px_rgba(255,95,31,0.2)]">
             <ShieldAlert className="w-4.5 h-4.5" />
           </div>
@@ -287,7 +297,7 @@ export default function AdminControlCenter() {
         </div>
 
         {/* Global Action Links */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link
             href="/admin/teams"
             className="px-3 py-1.5 bg-[#FF5F1F] hover:bg-white text-black font-extrabold text-xs rounded-md transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,95,31,0.3)]"
@@ -766,6 +776,25 @@ export default function AdminControlCenter() {
             {/* =================================================================== */}
             {/* 2. REGISTERED TEAMS & PORTFOLIO OVERRIDES                           */}
             {/* =================================================================== */}
+            <section aria-label="Final score announcements" className="p-4 sm:p-6 bg-[#09090b] border border-amber-500/40 rounded-xl space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm sm:text-lg font-bold text-amber-400 flex items-center gap-2"><Trophy className="w-5 h-5" /> Announce Final Scores</h2>
+                <Link href="/stage" target="_blank" className="text-xs text-[#a1a1aa] underline">Open results on /stage ↗</Link>
+              </div>
+              {!announcement ? (
+                <>
+                  <p className="text-xs text-[#a1a1aa] leading-relaxed">Available in Round 5. Apply the final price updates first. Starting closes trading, cancels pending offers, and freezes every team’s cash and stock values. Reveal results manually from last place to first.</p>
+                  <button type="button" disabled={isProcessing || currentRound !== 5 || !leaderboard.length} onClick={() => handleAdminAction("START_SCORE_ANNOUNCEMENT")} className="w-full sm:w-auto px-4 py-3 rounded-lg bg-amber-400 text-black text-xs font-bold disabled:opacity-40">Start Final Score Announcement</button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-[#a1a1aa]">Final scores frozen · {announcement.revealedCount} / {announcement.teams.length} teams announced. Game changes remain locked until the simulation is reset.</p>
+                  {nextScore && <p className="text-sm text-white">Next: #{nextScore.rank} · {nextScore.teamName}</p>}
+                  <button type="button" disabled={isProcessing || !nextScore} onClick={() => handleAdminAction("REVEAL_NEXT_SCORE")} className="w-full sm:w-auto px-4 py-3 rounded-lg bg-amber-400 text-black text-xs font-bold disabled:opacity-40">{nextScore ? "Reveal Next Team" : "All Teams Announced"}</button>
+                </>
+              )}
+            </section>
+
             <section id="registered-teams" className="p-5 sm:p-6 bg-[#09090b] border border-[#27272a] rounded-xl space-y-4 shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#1e1e1e]">
                 <div>
@@ -838,6 +867,7 @@ export default function AdminControlCenter() {
                           </div>
                           <div className="text-[11px] text-[#71717a] mt-0.5 flex flex-wrap gap-x-3 gap-y-1">
                             <span>Cash: <strong className="text-white">{formatCurrency(team.cashBalance)}</strong></span>
+                            <span>Round peer trades: <strong className="text-[#FF5F1F]">{team.qualifyingPeerTrades || 0}/2</strong></span>
                             <span>Holdings: <strong className="text-[#a1a1aa]">{formatCurrency(team.holdingsValue)}</strong></span>
                             <span>Net Worth: <strong className="text-[#10B981]">{formatCurrency(team.totalPortfolioValue)}</strong></span>
                             <span>PnL: <strong className={team.pnl >= 0 ? "text-[#10B981]" : "text-[#F43F5E]"}>
@@ -1017,7 +1047,50 @@ export default function AdminControlCenter() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {/* Trigger Round 2 Market Expansion */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={Boolean(gameState?.marketSellLockEnabled)}
+                  disabled={isProcessing}
+                  onClick={() => handleAdminAction("SET_MARKET_SELL_LOCK", { enabled: !gameState?.marketSellLockEnabled })}
+                  className="p-4 bg-[#030303] border border-[#1e1e1e] hover:border-[#FF5F1F] rounded-xl text-left transition-all disabled:opacity-40"
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-[#FF5F1F]">
+                    <span className="flex items-center gap-2"><Lock className="w-4 h-4" /> Lock Selling to Market</span>
+                    <span>{gameState?.marketSellLockEnabled ? "ON" : "OFF"}</span>
+                  </div>
+                  <p className="text-[10px] text-[#a1a1aa] mt-2 leading-relaxed">
+                    {gameState?.marketSellLockEnabled
+                      ? "Each team must complete 2 direct trades or accepted swaps per round before selling to the market."
+                      : "Teams can sell to the market at any time during open trading."}
+                  </p>
+                </button>
+                <button type="button" role="switch" aria-checked={Boolean(gameState?.negotiatedPricesEnabled)} disabled={isProcessing}
+                  onClick={() => handleAdminAction("SET_NEGOTIATED_PRICES", { enabled: !gameState?.negotiatedPricesEnabled })}
+                  className="p-4 bg-[#030303] border border-[#1e1e1e] hover:border-[#FF5F1F] rounded-xl text-left disabled:opacity-40">
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-[#FF5F1F]"><span>Negotiated Direct-Sale Prices</span><span>{gameState?.negotiatedPricesEnabled ? "ON" : "OFF"}</span></div>
+                  <p className="text-[10px] text-[#a1a1aa] mt-2 leading-relaxed">Allow custom prices per share in new direct offers. The buyer must accept. When disabled, new offers use market prices; existing offers keep their quoted price.</p>
+                </button>
+                <div className="p-4 bg-[#030303] border border-[#1e1e1e] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-xs font-bold text-[#FF5F1F]"><DollarSign className="w-4 h-4" /> Market-Sale Commission</span>
+                    <button type="button" role="switch" aria-checked={Boolean(gameState?.marketSellCommissionEnabled)} disabled={isProcessing}
+                      onClick={() => handleAdminAction("SET_MARKET_SELL_COMMISSION", { enabled: !gameState?.marketSellCommissionEnabled, percent: gameState?.marketSellCommissionPercent ?? 5 })}
+                      className="px-2 py-1 rounded border border-[#27272a] text-[11px] text-white disabled:opacity-40">
+                      {gameState?.marketSellCommissionEnabled ? "ON" : "OFF"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-[#a1a1aa] leading-relaxed">Deducted from gross market-sale proceeds. Direct sales and swaps are exempt. Current rate: {gameState?.marketSellCommissionPercent ?? 5}%.</p>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label htmlFor="market-sale-commission" className="block text-[10px] text-[#71717a] mb-1">Commission percentage (0–100)</label>
+                      <input id="market-sale-commission" type="number" min="0" max="100" step="any" value={commissionDraft} onChange={(event) => setCommissionDraft(event.target.value)} className="w-full bg-[#09090b] border border-[#27272a] rounded-lg px-2 py-1.5 text-white text-xs" />
+                    </div>
+                    <button type="button" disabled={isProcessing || commissionDraft.trim() === "" || !Number.isFinite(Number(commissionDraft)) || Number(commissionDraft) < 0 || Number(commissionDraft) > 100}
+                      onClick={() => handleAdminAction("SET_MARKET_SELL_COMMISSION", { enabled: Boolean(gameState?.marketSellCommissionEnabled), percent: Number(commissionDraft) })}
+                      className="px-3 py-2 rounded-lg bg-[#FF5F1F] text-black text-xs font-bold disabled:opacity-40">Save Rate</button>
+                  </div>
+                </div>
                 <button
                   onClick={() => handleAdminAction("TRIGGER_EXPANSION")}
                   className="p-4 bg-[#030303] border border-[#1e1e1e] hover:border-amber-500 rounded-xl text-left transition-all group shadow-md"
@@ -1082,10 +1155,10 @@ export default function AdminControlCenter() {
                 {/* Emergency Reset */}
                 <button
                   onClick={() => {
-                    if (confirm("WARNING: This will reset all teams, transactions, and game state back to Round 0! Proceed?")) {
-                      handleAdminAction("RESET_GAME");
-                    }
+                    setActionStatus(null);
+                    resetDialogRef.current?.showModal();
                   }}
+                  disabled={isProcessing}
                   className="p-4 bg-[#030303] border border-red-900/40 hover:border-red-500 rounded-xl text-left transition-all group shadow-md"
                 >
                   <div className="flex items-center gap-2 text-xs font-bold text-red-400">
@@ -1146,11 +1219,12 @@ export default function AdminControlCenter() {
                             {tx.quantity ? `${tx.quantity} shares of ` : ""}
                             <strong className="text-[#FF5F1F]">{tx.ticker}</strong>
                           </span>
-                          {tx.totalAmount && (
+                          {tx.total !== undefined && (
                             <span className="text-[#71717a] ml-2">
-                              • {formatCurrency(tx.totalAmount)}
+                              • {formatCurrency(tx.total)}
                             </span>
                           )}
+                          {tx.commissionAmount !== undefined && <span className="text-rose-400 ml-2">Fee: {formatCurrency(tx.commissionAmount)} ({tx.commissionPercent}%)</span>}
                         </div>
                       </div>
                       <span className="text-[10px] text-[#71717a] shrink-0">{tx.timestamp}</span>
@@ -1167,9 +1241,59 @@ export default function AdminControlCenter() {
       {/* ========================================================================= */}
       {/* CASH ADJUSTMENT MODAL                                                     */}
       {/* ========================================================================= */}
+      <dialog
+        ref={resetDialogRef}
+        aria-labelledby="reset-simulation-title"
+        aria-describedby="reset-simulation-description"
+        onCancel={(event) => { if (isProcessing) event.preventDefault(); }}
+        className="modal-panel m-auto w-[calc(100%_-_2rem)] max-w-md bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl text-white backdrop:bg-black/80 backdrop:backdrop-blur-sm"
+      >
+        <h2 id="reset-simulation-title" className="text-lg font-bold flex items-center gap-2">
+          <RotateCcw className="w-5 h-5 text-[#FF5F1F]" /> Reset Simulation
+        </h2>
+        <p id="reset-simulation-description" className="mt-3 text-sm text-[#a1a1aa] leading-relaxed">
+          Start again at Round 0. All previous transactions, swaps, and direct sale offers will be cleared.
+        </p>
+        <p className="mt-3 text-xs text-[#a1a1aa] leading-relaxed">
+          Keep teams to retain their names, PINs, rosters, and table assignments. Each team starts with $100,000, no holdings, and fresh readiness and trading access.
+        </p>
+        {actionStatus && <p role="alert" className="mt-3 text-xs text-red-400">{actionStatus}</p>}
+        <div className="mt-5 flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={isProcessing}
+            onClick={async () => {
+              if (await handleAdminAction("RESET_GAME", { keepTeams: true })) resetDialogRef.current?.close();
+            }}
+            className="py-2.5 bg-[#FF5F1F] text-black hover:bg-white rounded-xl text-xs font-bold disabled:opacity-40"
+          >
+            Reset &amp; Keep Teams
+          </button>
+          <button
+            type="button"
+            disabled={isProcessing}
+            onClick={async () => {
+              if (await handleAdminAction("RESET_GAME", { keepTeams: false })) resetDialogRef.current?.close();
+            }}
+            className="py-2.5 bg-red-950/40 border border-red-900/60 text-red-400 hover:bg-red-950 rounded-xl text-xs font-bold disabled:opacity-40"
+          >
+            Reset &amp; Remove All Teams
+          </button>
+          <button
+            type="button"
+            autoFocus
+            disabled={isProcessing}
+            onClick={() => resetDialogRef.current?.close()}
+            className="py-2.5 text-[#a1a1aa] hover:text-white rounded-xl text-xs font-bold disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
+      </dialog>
+
       {adjustModalTeam && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4">
+        <div className="modal-overlay fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="modal-panel w-full max-w-md bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#1e1e1e]">
               <div className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-[#FF5F1F]" />
@@ -1274,13 +1398,13 @@ export default function AdminControlCenter() {
           const isExpansion = target === 2;
 
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
               <motion.div
                 initial={{ scale: 0.85, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.85, opacity: 0, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 350 }}
-                className="w-full max-w-lg bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4 relative overflow-hidden font-mono"
+                className="modal-panel w-full max-w-lg bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4 relative overflow-hidden font-mono"
               >
                 {/* Ambient Top Glow */}
                 <div

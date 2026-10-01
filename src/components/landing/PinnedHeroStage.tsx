@@ -43,7 +43,7 @@ export function PinnedHeroStage() {
 
   useEffect(() => {
     const media = gsap.matchMedia();
-    media.add("(prefers-reduced-motion: no-preference)", () => {
+    media.add("(min-width: 768px) and (prefers-reduced-motion: no-preference)", () => {
     let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, particles: THREE.Points;
     let animationFrameId: number;
 
@@ -416,7 +416,7 @@ export function PinnedHeroStage() {
         </div>
 
         {/* 3D Perspective Container */}
-        <div className="flex w-full z-20 px-6 absolute inset-0 items-center justify-center perspective-[1000px]">
+        <div className="hero-phases flex w-full z-20 px-6 absolute inset-0 items-center justify-center perspective-[1000px]">
           {/* Phase 1: Arrival */}
           <div id="phase-1-content" className="absolute flex flex-col items-center justify-center text-center w-full pointer-events-auto px-4">
             <div className="w-full max-w-[980px] mx-auto flex flex-col items-center">

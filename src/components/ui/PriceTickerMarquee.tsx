@@ -1,8 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { STOCKS_DATA } from "@/src/lib/market-data";
 import { CompanyLogo } from "./CompanyLogo";
 
 interface PriceTickerMarqueeProps {
@@ -20,39 +19,33 @@ export function PriceTickerMarquee({
   speed = 45,
   stocks,
 }: PriceTickerMarqueeProps) {
-  // Use live stocks or default master data
-  const tickerItems = stocks && stocks.length > 0
-    ? stocks
-    : STOCKS_DATA.map((s) => ({
-        ticker: s.ticker,
-        currentPrice: s.startingPrice,
-        roundChangePercent: Math.round((Math.sin(s.startingPrice) * 15) * 10) / 10,
-      }));
+  const tickerItems = stocks || [];
 
-  // Duplicate for seamless infinite loop
-  const duplicatedItems = [...tickerItems, ...tickerItems];
+  const reduceMotion = useReducedMotion();
 
   return (
     <div className={`w-full overflow-hidden bg-[#050508] border-y border-[#1e1e1e] py-2.5 relative select-none font-mono ${className}`}>
       {/* Side Fade Gradient Masks */}
-      <div className="absolute left-0 top-0 bottom-0 w-24 sm:w-36 bg-gradient-to-r from-[#030303] via-[#030303]/80 to-transparent z-10 pointer-events-none" />
-      <div className="absolute right-0 top-0 bottom-0 w-24 sm:w-36 bg-gradient-to-l from-[#030303] via-[#030303]/80 to-transparent z-10 pointer-events-none" />
+      <div className="absolute left-0 top-0 bottom-0 w-4 sm:w-36 bg-gradient-to-r from-[#030303] to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-4 sm:w-36 bg-gradient-to-l from-[#030303] to-transparent z-10 pointer-events-none" />
 
       <motion.div
-        className="flex items-center gap-4 sm:gap-6 whitespace-nowrap will-change-transform"
-        animate={{ x: ["0%", "-50%"] }}
+        className={`flex items-center whitespace-nowrap ${reduceMotion ? "w-full overflow-x-auto" : "w-max will-change-transform"}`}
+        animate={reduceMotion ? { x: 0 } : { x: ["0%", "-50%"] }}
         transition={{
           repeat: Infinity,
           ease: "linear",
           duration: speed,
         }}
       >
-        {duplicatedItems.map((item, index) => {
+        {[0, 1].map((copy) => (
+          <div key={copy} aria-hidden={copy === 1} className="flex shrink-0 items-center gap-3 sm:gap-6 pr-3 sm:pr-6">
+        {tickerItems.map((item) => {
           const isUp = item.roundChangePercent >= 0;
           return (
             <div
-              key={`${item.ticker}-${index}`}
-              className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg bg-[#09090b]/80 border border-[#27272a] hover:border-[#FF5F1F]/60 transition-all shadow-sm group"
+              key={item.ticker}
+              className="inline-flex shrink-0 items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-[#09090b]/80 border border-[#27272a] hover:border-[#FF5F1F]/60 transition-all shadow-sm group"
             >
               <CompanyLogo ticker={item.ticker} size="sm" />
               <span className="font-bold text-white text-xs tracking-wider group-hover:text-[#FF5F1F] transition-colors">
@@ -77,6 +70,8 @@ export function PriceTickerMarquee({
             </div>
           );
         })}
+          </div>
+        ))}
       </motion.div>
     </div>
   );

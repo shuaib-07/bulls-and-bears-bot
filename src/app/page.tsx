@@ -12,7 +12,7 @@ import { ScrollProgress } from "@/src/components/ui/scroll-progress";
 
 export default function LandingPage() {
   return (
-    <main className="relative min-h-screen bg-[var(--bg)] text-[var(--fg)] overflow-x-hidden selection:bg-[var(--accent)]/30 selection:text-white">
+    <main className="responsive-page relative min-h-screen bg-[var(--bg)] text-[var(--fg)] overflow-x-hidden selection:bg-[var(--accent)]/30 selection:text-white">
       {/* Top Cyber Gradient Scroll Progress Indicator */}
       <ScrollProgress />
 

@@ -1,11 +1,17 @@
+import { randomUUID } from "node:crypto";
+import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
 import { getGameState } from "@/src/lib/db";
+import { getPeerTradeCount, recordPeerTrade, REQUIRED_PEER_TRADES } from "@/src/lib/peer-trades";
+import { calculateMarketSale, isValidPeerPrice } from "@/src/lib/market-sale";
+import { STOCKS_DATA } from "@/src/lib/market-data";
 
-export async function POST(request: Request) {
+async function execute(request: Request) {
   try {
-    const { teamId, action, ticker, quantity, targetTeamId, offerId } = await request.json();
+    const { teamId, action, ticker, quantity, targetTeamId, offerId, pricePerShare, simulationId } = await request.json();
 
     const state = getGameState();
+    if (simulationId !== state.simulationId) return NextResponse.json({ error: "The simulation was reset. Refresh your terminal before trading." }, { status: 409 });
 
     // 0. Toggle Team Readiness (Allowed in SETUP / Standby)
     if (action === "TOGGLE_READY") {
@@ -17,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         isReady: team.isReady,
-        message: team.isReady ? `"${team.teamName}" marked READY for Round 1!` : `"${team.teamName}" marked STANDBY.`,
+        message: team.isReady ? `"${team.teamName}" marked READY for Round 0!` : `"${team.teamName}" marked STANDBY.`,
       });
     }
 
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (state.tradingExpiresAt && Date.now() > state.tradingExpiresAt) {
+    if (state.tradingExpiresAt && Date.now() >= state.tradingExpiresAt) {
       state.status = "TRADING_CLOSED";
       return NextResponse.json(
         { error: "Round trading time has EXPIRED! Market is locked." },
@@ -56,6 +62,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Sell offer not found or no longer available." }, { status: 404 });
       }
 
+      if (offer.buyerTeamId !== team.id) {
+        return NextResponse.json({ error: "This offer is addressed to another team." }, { status: 403 });
+      }
+
       if (offer.status === "SOLD_OUT" || offer.status === "ACCEPTED" || offer.status === "CANCELLED") {
         return NextResponse.json(
           { error: "Stock was sold to another team / Offer no longer available!", code: "SOLD_TO_ANOTHER" },
@@ -72,10 +82,14 @@ export async function POST(request: Request) {
       }
 
       const seller = state.teams[offer.sellerTeamId];
+      if (offer.status !== "PENDING") {
+        return NextResponse.json({ error: "This offer is no longer pending." }, { status: 400 });
+      }
       if (!seller) {
         offer.status = "CANCELLED";
         return NextResponse.json({ error: "Seller team is no longer active." }, { status: 400 });
       }
+      if (seller.isFrozen) return NextResponse.json({ error: "The seller team is frozen." }, { status: 403 });
 
       // Verify seller STILL owns the shares (Collision / multi-team buy check)
       const currentSellerShares = seller.portfolio[offer.ticker] || 0;
@@ -102,12 +116,14 @@ export async function POST(request: Request) {
       if (seller.portfolio[offer.ticker] <= 0) {
         delete seller.portfolio[offer.ticker];
       }
-      seller.cashBalance += offer.total;
+      seller.cashBalance = Number((seller.cashBalance + offer.total).toFixed(2));
 
       team.portfolio[offer.ticker] = (team.portfolio[offer.ticker] || 0) + offer.quantity;
-      team.cashBalance -= offer.total;
+      team.cashBalance = Number((team.cashBalance - offer.total).toFixed(2));
 
       offer.status = "ACCEPTED";
+      recordPeerTrade(seller, state.currentRound);
+      recordPeerTrade(team, state.currentRound);
 
       // Check if seller has any other pending offers for this stock that now exceed their remaining shares
       const remainingSellerShares = seller.portfolio[offer.ticker] || 0;
@@ -124,16 +140,18 @@ export async function POST(request: Request) {
       });
 
       state.transactions.push({
-        id: `tx-p2p-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: randomUUID(),
         timestamp: new Date().toLocaleTimeString(),
         round: state.currentRound,
-        teamName: `${seller.teamName} ➔ ${team.teamName}`,
-        type: "SWAP",
+        teamId: team.id,
+        teamName: team.teamName,
+        type: "DIRECT_SELL",
         ticker: offer.ticker,
         quantity: offer.quantity,
         price: offer.price,
         total: offer.total,
         counterparty: seller.teamName,
+        counterpartyTeamId: seller.id,
       });
 
       return NextResponse.json({
@@ -148,7 +166,7 @@ export async function POST(request: Request) {
     // -------------------------------------------------------------------------
     if (action === "REJECT_DIRECT_SELL") {
       const offer = (state.directSellOffers || []).find((o) => o.id === offerId);
-      if (offer) {
+      if (offer && offer.buyerTeamId === team.id && offer.status === "PENDING") {
         offer.status = "REJECTED";
       }
       return NextResponse.json({ success: true, message: "Sell offer declined." });
@@ -159,19 +177,20 @@ export async function POST(request: Request) {
     // -------------------------------------------------------------------------
     if (action === "CANCEL_DIRECT_SELL") {
       const offer = (state.directSellOffers || []).find((o) => o.id === offerId);
-      if (offer && offer.sellerTeamId === team.id) {
+      if (offer && offer.sellerTeamId === team.id && offer.status === "PENDING") {
         offer.status = "CANCELLED";
       }
       return NextResponse.json({ success: true, message: "Sell offer cancelled." });
     }
 
-    const qty = parseInt(quantity, 10);
-    if (isNaN(qty) || qty <= 0) {
+    const qty = quantity;
+    if (!Number.isSafeInteger(qty) || qty <= 0) {
       return NextResponse.json({ error: "Quantity must be a positive integer." }, { status: 400 });
     }
 
     const price = state.stockPrices[ticker];
-    if (!price) {
+    const stock = STOCKS_DATA.find((item) => item.ticker === ticker);
+    if (!stock || !(stock.entryRound === 0 || state.marketExpanded || state.currentRound >= 2) || typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
       return NextResponse.json({ error: `Stock ${ticker} not found in active market.` }, { status: 404 });
     }
 
@@ -202,11 +221,12 @@ export async function POST(request: Request) {
       team.portfolio[ticker] = (team.portfolio[ticker] || 0) + qty;
 
       state.transactions.push({
-        id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: randomUUID(),
         timestamp: new Date().toLocaleTimeString(),
         round: state.currentRound,
         teamName: team.teamName,
         type: "BUY",
+        teamId: team.id,
         ticker,
         quantity: qty,
         price,
@@ -244,19 +264,29 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "Cannot sell shares to your own team." }, { status: 400 });
         }
 
+        if (pricePerShare !== undefined && !isValidPeerPrice(pricePerShare)) {
+          return NextResponse.json({ error: "Offer price must be positive, with at most two decimal places." }, { status: 400 });
+        }
+        if (!state.negotiatedPricesEnabled && pricePerShare !== undefined && pricePerShare !== price) {
+          return NextResponse.json({ error: "Negotiated prices are disabled. Use the current market price for a new offer." }, { status: 409 });
+        }
+        const offerPrice = state.negotiatedPricesEnabled && pricePerShare !== undefined ? pricePerShare : price;
+        const offerTotal = Math.round(offerPrice * qty * 100) / 100;
+
         const newOffer = {
-          id: `offer-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+          id: randomUUID(),
           sellerTeamId: team.id,
           sellerTeamName: team.teamName,
           buyerTeamId: targetTeam.id,
           buyerTeamName: targetTeam.teamName,
           ticker,
           quantity: qty,
-          price,
-          total: totalCost,
+          price: offerPrice,
+          total: offerTotal,
           status: "PENDING" as const,
           expiresAt: Date.now() + 120 * 1000, // 120 seconds countdown
           createdAt: Date.now(),
+          round: state.currentRound,
         };
 
         if (!state.directSellOffers) state.directSellOffers = [];
@@ -271,7 +301,17 @@ export async function POST(request: Request) {
       }
 
       // Case B: SELL TO OPEN MARKET POOL
-      team.cashBalance += totalCost;
+      const peerTrades = getPeerTradeCount(team, state.currentRound);
+      if (state.marketSellLockEnabled && peerTrades < REQUIRED_PEER_TRADES) {
+        return NextResponse.json({
+          error: `Market sales are locked. Complete ${REQUIRED_PEER_TRADES - peerTrades} more direct trade(s) or accepted swap(s) with other teams in Round ${state.currentRound}.`,
+          code: "MARKET_SELL_LOCKED",
+          qualifyingPeerTrades: peerTrades,
+        }, { status: 403 });
+      }
+      const commissionPercent = state.marketSellCommissionEnabled ? state.marketSellCommissionPercent || 0 : 0;
+      const sale = calculateMarketSale(price, qty, commissionPercent);
+      team.cashBalance = Number((team.cashBalance + sale.netTotal).toFixed(2));
       state.stockFloats[ticker] = (state.stockFloats[ticker] || 0) + qty;
       team.portfolio[ticker] -= qty;
       if (team.portfolio[ticker] <= 0) {
@@ -292,20 +332,25 @@ export async function POST(request: Request) {
       });
 
       state.transactions.push({
-        id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: randomUUID(),
         timestamp: new Date().toLocaleTimeString(),
         round: state.currentRound,
         teamName: team.teamName,
         type: "SELL",
+        teamId: team.id,
         ticker,
         quantity: qty,
         price,
-        total: totalCost,
+        total: sale.netTotal,
+        grossTotal: sale.grossTotal,
+        commissionAmount: sale.commissionAmount,
+        commissionPercent,
       });
 
       return NextResponse.json({
         success: true,
-        message: `Successfully sold ${qty} shares of ${ticker} to market pool for $${totalCost.toLocaleString()}!`,
+        message: `Sold ${qty} shares of ${ticker} to the market. Gross: $${sale.grossTotal.toFixed(2)}; commission: $${sale.commissionAmount.toFixed(2)} (${commissionPercent}%); net received: $${sale.netTotal.toFixed(2)}.`,
+        sale,
         team,
         availableFloat: state.stockFloats[ticker],
       });
@@ -315,4 +360,8 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: "Failed to execute order." }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return runGameStateRequest(request, execute);
 }

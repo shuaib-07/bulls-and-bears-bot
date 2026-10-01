@@ -214,9 +214,9 @@ export function FloatingDockMenu({
     <div
       ref={containerRef}
       className={cn(
-        "z-50 flex flex-col items-center justify-end select-none font-mono",
+        "floating-dock z-50 flex flex-col items-center justify-end select-none font-mono",
         isFixed
-          ? "fixed inset-x-0 bottom-4 sm:bottom-6 mx-auto w-fit max-w-[calc(100vw-24px)]"
+          ? "fixed inset-x-3 bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))] sm:inset-x-0 sm:bottom-6 mx-auto w-auto sm:w-fit max-w-[calc(100%_-_24px)]"
           : "relative w-fit max-w-full",
         className
       )}
@@ -232,7 +232,7 @@ export function FloatingDockMenu({
             transformOrigin: "bottom center",
           }}
           className={cn(
-            "relative overflow-hidden rounded-2xl",
+            "relative w-full max-w-full overflow-hidden rounded-2xl",
             "bg-[#09090b]/95 text-white",
             "border border-[#27272a] shadow-[0_12px_40px_rgba(0,0,0,0.85),0_0_25px_rgba(255,95,31,0.15)] backdrop-blur-xl",
             "flex flex-col justify-end p-1.5 transition-all duration-200"
@@ -482,7 +482,7 @@ export function FloatingDockMenu({
                       onSearch?.(e.target.value);
                     }}
                     placeholder="Search stock ticker, sector, or name..."
-                    className="flex-1 bg-transparent border-0 outline-none text-xs text-white placeholder:text-[#71717a]"
+                    className="min-w-0 flex-1 bg-transparent border-0 outline-none text-base sm:text-xs text-white placeholder:text-[#71717a]"
                   />
                   <button
                     type="button"
@@ -505,7 +505,7 @@ export function FloatingDockMenu({
                     isAnyActive ? "justify-center" : "justify-start"
                   )}
                 >
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-1 min-w-0 items-center gap-0.5 sm:gap-1">
                     {tabs.map((tab, idx) => {
                       const iconNode = tab.icon;
                       const isActive = activeIndex === idx;
@@ -515,20 +515,21 @@ export function FloatingDockMenu({
                         <button
                           key={tab.id}
                           type="button"
+                          aria-label={tab.label}
                           onClick={() => handleTabClick(idx)}
                           className={cn(
-                            "relative flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-lg px-3 transition-all outline-none",
+                            "relative flex h-11 sm:h-9 min-w-0 flex-1 sm:flex-none cursor-pointer items-center justify-center rounded-lg px-1 sm:px-3 transition-all outline-none",
                             isActive
                               ? "font-bold text-white bg-[#FF5F1F]/20 border border-[#FF5F1F]/50 shadow-[0_0_15px_rgba(255,95,31,0.25)]"
                               : "text-[#a1a1aa] hover:text-white hover:bg-[#18181b] border border-transparent"
                           )}
                         >
-                          <div className="relative z-10 flex items-center justify-center gap-1.5">
+                          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5">
                             {iconNode && (
                               <div className="flex size-4 shrink-0 items-center justify-center">{iconNode}</div>
                             )}
                             {showLabel && (
-                              <span className="text-xs font-bold tracking-tight whitespace-nowrap">
+                              <span className="text-[9px] min-[360px]:text-[10px] sm:text-xs font-bold tracking-tight whitespace-nowrap">
                                 {tab.label}
                               </span>
                             )}
@@ -545,6 +546,7 @@ export function FloatingDockMenu({
                     onClick={openSearch}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#a1a1aa] hover:text-[#FF5F1F] hover:bg-[#18181b] transition-all outline-none"
                     title="Search Markets"
+                    aria-label="Search markets"
                   >
                     <Search className="w-4 h-4" />
                   </button>

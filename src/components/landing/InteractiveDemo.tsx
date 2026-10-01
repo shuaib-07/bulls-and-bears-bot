@@ -130,10 +130,10 @@ export function InteractiveDemo() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.2 }}
-            className="bg-[#09090b] border border-[#27272a] rounded-sm p-6 md:p-8"
+            className="bg-[#09090b] border border-[#27272a] rounded-sm p-3 sm:p-6 md:p-8"
           >
             {/* Top Stat Bar */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-6 mb-6 border-b border-[#1e1e1e] font-mono">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-4 gap-3 pb-6 mb-6 border-b border-[#1e1e1e] font-mono">
               <div className="p-3 bg-[#030303] border border-[#1e1e1e] rounded-sm">
                 <div className="text-[10px] text-[#71717a] uppercase">Cash Balance</div>
                 <div className="text-lg font-bold text-white">{formatCurrency(cash)}</div>
@@ -168,7 +168,7 @@ export function InteractiveDemo() {
                 <div className="space-y-4 text-xs font-mono">
                   <div>
                     <label className="block text-[10px] text-[#71717a] uppercase mb-1">Select Asset</label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {["ALPHA", "BETA", "GAMMA", "DELTA"].map((t) => (
                         <button
                           key={t}

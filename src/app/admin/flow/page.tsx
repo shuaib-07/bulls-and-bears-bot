@@ -201,12 +201,12 @@ export default function AdminFlowSpecification() {
   const biggestLoser = [...roundChangesList].sort((a, b) => a.pct - b.pct)[0];
 
   return (
-    <div className="min-h-screen bg-[#030303] text-[#fafafa] font-mono p-4 sm:p-6 lg:p-10 select-none cyber-grid print:bg-white print:text-black print:p-0">
+    <div className="responsive-page min-h-screen bg-[#030303] text-[#fafafa] font-mono p-4 sm:p-6 lg:p-10 select-none cyber-grid print:bg-white print:text-black print:p-0">
       <div className="max-w-7xl mx-auto space-y-8 print:space-y-4">
         {/* 1. TOP HEADER & NAVIGATION (Hidden in Print) */}
         <header className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-[#1e1e1e] print:hidden">
           <div>
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex flex-wrap items-center gap-3 mb-2">
               <Link
                 href="/admin"
                 className="p-2 bg-[#09090b] border border-[#27272a] hover:border-[#FF5F1F] text-[#a1a1aa] hover:text-white rounded-lg transition-colors flex items-center gap-1.5 text-xs font-bold"

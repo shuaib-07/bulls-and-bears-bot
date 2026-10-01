@@ -284,12 +284,12 @@ export const ROUNDS_DATA: RoundInfo[] = [
     subtitle: "Onboarding & Market Initiation",
     durationMinutes: 10,
     newsStories: [
-      { id: 1, headline: "Major tech firms announce massive expansion in cloud computing infrastructure.", sector: "Technology", clueSummary: "Hyperscalers ramping up capex." },
-      { id: 2, headline: "Global consumer confidence beats expectations across North America & Europe.", sector: "Consumer", clueSummary: "Discretionary retail tailwinds." },
-      { id: 3, headline: "Disruption reported along vital international maritime fuel transit corridor.", sector: "Energy", clueSummary: "Crude supply tension." },
-      { id: 4, headline: "Airlines revise long-term fleet procurement strategies citing cost shifts.", sector: "Aerospace", clueSummary: "Aircraft delivery schedule delays." },
-      { id: 5, headline: "Cross-border digital settlement volumes break quarterly records.", sector: "Fintech", clueSummary: "Payment network transaction growth." },
-      { id: 6, headline: "Surge in enterprise requests for specialized outpatient medical services.", sector: "Healthcare", clueSummary: "Healthcare utilization uptrend." },
+      { id: 1, headline: "Major tech firms announce massive expansion in cloud computing infrastructure.", sector: "Technology", clueSummary: "What needs to be in place before an expansion can happen?" },
+      { id: 2, headline: "Global consumer confidence beats expectations across North America & Europe.", sector: "Consumer", clueSummary: "How might greater confidence change everyday decisions?" },
+      { id: 3, headline: "Disruption reported along vital international maritime fuel transit corridor.", sector: "Energy", clueSummary: "Who depends on this route, directly or indirectly?" },
+      { id: 4, headline: "Airlines revise long-term fleet procurement strategies citing cost shifts.", sector: "Aerospace", clueSummary: "How far might a change in purchasing plans ripple?" },
+      { id: 5, headline: "Cross-border digital settlement volumes break quarterly records.", sector: "Fintech", clueSummary: "What has to happen behind the scenes for each transaction?" },
+      { id: 6, headline: "Surge in enterprise requests for specialized outpatient medical services.", sector: "Healthcare", clueSummary: "What might change when more people seek the same service?" },
     ],
     marketChanges: {
       AAPL: 5, MSFT: 4, NVDA: 9, AMZN: 4, GOOGL: -4, META: 7, TSLA: -6, JPM: 4, GS: 3, XOM: 7,

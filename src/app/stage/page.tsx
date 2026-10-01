@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { CompanyLogo } from "@/src/components/ui/CompanyLogo";
+import { FinalResults } from "@/src/components/final-results";
 import { PriceTickerMarquee } from "@/src/components/ui/PriceTickerMarquee";
 import { EyeTracking } from "@/src/components/ui/eye-tracking";
 import { FlippingWordSwap } from "@/src/components/ui/flipping-word-swap";
@@ -101,11 +102,12 @@ export default function StageProjectorView() {
   // Rotate News Headlines every 3 seconds on Stage
   useEffect(() => {
     if (!gameState?.roundInfo?.newsStories?.length) return;
+    setActiveNewsIdx(0);
     const newsInterval = setInterval(() => {
       setActiveNewsIdx((prev) => (prev + 1) % gameState.roundInfo.newsStories.length);
     }, 3000);
     return () => clearInterval(newsInterval);
-  }, [gameState]);
+  }, [gameState?.currentRound, gameState?.roundInfo?.newsStories?.length]);
 
   // Rotate Empty State Cycling Text every 4 seconds
   useEffect(() => {
@@ -126,6 +128,8 @@ export default function StageProjectorView() {
   const isResetState = !gameState || (gameState.currentRound === 0 && gameState.status === "SETUP");
   const currentNews = gameState?.roundInfo?.newsStories?.[activeNewsIdx];
 
+  if (gameState?.scoresAnnouncement) return <FinalResults announcement={gameState.scoresAnnouncement} />;
+
   // --------------------------------------------------------------------------
   // A. RESET / STANDBY EMPTY STATE WITH EYE-TRACKING & FLIPPING WORD SWAP
   // --------------------------------------------------------------------------
@@ -137,7 +141,7 @@ export default function StageProjectorView() {
     const readyPct = Math.round((readyCount / totalSquads) * 100);
 
     return (
-      <div className="min-h-screen bg-[#020202] text-[#fafafa] font-mono p-6 md:p-12 flex flex-col justify-between select-none cyber-grid relative overflow-hidden">
+      <div className="responsive-page min-h-screen bg-[#020202] text-[#fafafa] font-mono p-6 md:p-12 flex flex-col justify-between select-none cyber-grid relative overflow-hidden">
         {/* Subtle Background Glows */}
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-[#FF5F1F]/10 blur-[140px] rounded-full pointer-events-none" />
         <div className="absolute bottom-10 right-1/4 w-[300px] h-[300px] bg-[#10B981]/5 blur-[120px] rounded-full pointer-events-none" />
@@ -158,7 +162,7 @@ export default function StageProjectorView() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="px-3.5 py-1.5 rounded bg-[#09090b] border border-[#27272a] text-xs font-bold text-amber-400 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
               <span>STANDBY // AWAITING HOST SIGNAL</span>
@@ -189,18 +193,18 @@ export default function StageProjectorView() {
                 word2={currentPhrase.w2}
                 duration={450}
                 stagger={35}
-                className="text-2xl sm:text-4xl md:text-5xl font-display font-extrabold text-white tracking-tight"
+                className="text-lg min-[400px]:text-2xl sm:text-4xl md:text-5xl font-display font-extrabold text-white tracking-tight"
                 toClassName="text-[#FF5F1F]"
               />
             </div>
 
             <p className="text-xs sm:text-sm text-[#71717a] max-w-lg mt-2">
-              Round 1 classified intelligence and initial stock floats will unlock when the host releases the news flash.
+              Round 0 news and the initial market will appear when the host releases the news flash. Trading opens separately at the host's signal.
             </p>
           </div>
 
           {/* Eye Tracking Cyber Visualizer */}
-          <div className="p-8 sm:p-10 bg-[#09090b]/80 border border-[#27272a] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl relative group hover:border-[#FF5F1F]/50 transition-colors duration-500 mb-6">
+          <div className="w-full max-w-sm p-4 sm:p-10 bg-[#09090b]/80 border border-[#27272a] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl relative group hover:border-[#FF5F1F]/50 transition-colors duration-500 mb-6">
             <div className="absolute top-3 left-3 text-[9px] text-[#52525b] uppercase tracking-widest font-mono">
               [ OPTICAL RADAR // TRACKING ACTIVE ]
             </div>
@@ -311,7 +315,7 @@ export default function StageProjectorView() {
 
         {/* Footer */}
         <footer className="pt-4 border-t border-[#18181b] flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#52525b] uppercase tracking-wider relative z-10">
-          <span>Host Portal: Step 1 &quot;Release News Flash&quot; initiates Round 1</span>
+          <span>Host Portal: Release Round 0 news, then open trading when ready</span>
           <span>SLH 15 Auditorium • Ramaiah University of Applied Sciences</span>
         </footer>
       </div>
@@ -322,9 +326,9 @@ export default function StageProjectorView() {
   // B. ACTIVE STAGE BOARD (ROUND 1-5 ACTIVE TRADING & NEWS BROADCAST)
   // --------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#020202] text-[#fafafa] font-mono p-4 md:p-6 flex flex-col justify-between select-none cyber-grid">
+    <div className="responsive-page min-h-screen bg-[#020202] text-[#fafafa] font-mono p-4 md:p-6 flex flex-col justify-between select-none cyber-grid">
       {/* 1. TOP STAGE HEADER */}
-      <header className="flex items-center justify-between pb-4 border-b border-[#1e1e1e]">
+      <header className="flex flex-wrap gap-3 items-center justify-between pb-4 border-b border-[#1e1e1e]">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-sm bg-[#FF5F1F]/15 border border-[#FF5F1F]/40 flex items-center justify-center text-[#FF5F1F] shadow-[0_0_15px_rgba(255,95,31,0.2)]">
             <TrendingUp className="w-6 h-6" />
@@ -340,7 +344,7 @@ export default function StageProjectorView() {
         </div>
 
         {/* Big Synced Clock & Status */}
-        <div className="flex items-center gap-5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-5">
           <div className="text-right">
             <div className="text-[10px] text-[#71717a] uppercase tracking-widest font-bold">
               {gameState?.roundInfo?.title || `ROUND ${gameState?.currentRound}`}
@@ -404,14 +408,11 @@ export default function StageProjectorView() {
       {currentNews && (
         <div className="my-3 p-4 bg-gradient-to-r from-[#111115] via-[#0d0d10] to-[#111115] border-2 border-[#FF5F1F]/40 rounded-lg space-y-2 shadow-[0_0_35px_rgba(255,95,31,0.12)] relative overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[#27272a]">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="px-2.5 py-0.5 bg-[#FF5F1F] text-black font-extrabold text-[11px] uppercase tracking-widest rounded flex items-center gap-1.5 shadow-[0_0_12px_rgba(255,95,31,0.5)] animate-pulse">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
                 <Newspaper className="w-3.5 h-3.5 fill-current" />
                 ROUND {gameState.currentRound} INTEL #{currentNews.id}
-              </span>
-              <span className="px-2 py-0.5 bg-[#18181b] border border-[#27272a] text-[11px] font-bold text-white uppercase tracking-wider rounded">
-                Sector: <span className="text-[#FF5F1F]">{currentNews.sector}</span>
               </span>
             </div>
 
@@ -435,11 +436,10 @@ export default function StageProjectorView() {
             <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white tracking-tight leading-snug">
               {currentNews.headline}
             </h2>
-            {currentNews.clueSummary && (
-              <div className="mt-1 text-xs text-[#a1a1aa] flex items-center gap-2">
-                <span className="text-[#FF5F1F] font-bold">ANALYSIS:</span>
-                <span>{currentNews.clueSummary}</span>
-              </div>
+            {gameState.currentRound === 0 && currentNews.clueSummary && (
+              <p className="mt-1 text-xs text-[#a1a1aa] leading-relaxed">
+                <span className="font-medium">Consider:</span> {currentNews.clueSummary}
+              </p>
             )}
           </div>
         </div>
@@ -451,7 +451,7 @@ export default function StageProjectorView() {
         <div className="flex-1 min-w-0 flex flex-col">
           {gameState?.leaderboardVisible ? (
             /* Hall Leaderboard Mode */
-            <div className="flex-1 bg-[#09090b] border border-[#27272a] rounded-sm p-6 flex flex-col justify-between">
+            <div className="flex-1 bg-[#09090b] border border-[#27272a] rounded-sm p-6 flex flex-col">
               <div className="text-center mb-6">
                 <div className="inline-flex items-center gap-2 text-xs text-amber-400 font-bold uppercase tracking-widest mb-1">
                   <Trophy className="w-4 h-4" />
@@ -462,56 +462,33 @@ export default function StageProjectorView() {
                 </h2>
               </div>
 
-              <div
-                className={`grid gap-3 max-w-6xl mx-auto w-full ${
-                  gameState?.stageAuditVisible !== false
-                    ? "grid-cols-1 md:grid-cols-2"
-                    : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-                }`}
-              >
-                {leaderboard.slice(0, 8).map((team, idx) => (
-                  <div
-                    key={team.id}
-                    className={`p-4 rounded-sm border flex items-center justify-between ${
-                      idx === 0
-                        ? "bg-amber-500/10 border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.2)]"
-                        : idx === 1
-                        ? "bg-slate-300/10 border-slate-400/40"
-                        : idx === 2
-                        ? "bg-amber-700/10 border-amber-700/40"
-                        : "bg-[#030303] border-[#1e1e1e]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`w-7 h-7 rounded-sm flex items-center justify-center font-bold text-xs ${
-                          idx === 0
-                            ? "bg-amber-400 text-black"
-                            : idx === 1
-                            ? "bg-slate-300 text-black"
-                            : idx === 2
-                            ? "bg-amber-700 text-white"
-                            : "bg-[#18181b] text-[#a1a1aa]"
-                        }`}
-                      >
-                        #{idx + 1}
-                      </span>
-                      <div>
-                        <div className="font-bold text-white text-sm truncate max-w-[140px]">{team.teamName}</div>
-                        <div className="text-[10px] text-[#71717a]">{formatCurrency(team.cashBalance)} cash</div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-sm sm:text-base font-bold text-[#10B981]">
-                        {formatCurrency(team.totalPortfolioValue)}
-                      </div>
-                      <div className="text-[10px] text-[#a1a1aa]">
-                        {team.pnl >= 0 ? `+${team.pnlPercent.toFixed(1)}%` : `${team.pnlPercent.toFixed(1)}%`}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className="w-full overflow-auto max-h-[60vh] rounded-lg border border-[#27272a]">
+                <table className="w-full min-w-[620px] text-left text-xs sm:text-sm tabular-nums">
+                  <caption className="sr-only">All teams ranked by total net worth, with live cash and stock holdings value.</caption>
+                  <thead className="sticky top-0 z-10 bg-[#121216] text-[10px] sm:text-xs text-[#a1a1aa] uppercase tracking-wider">
+                    <tr>
+                      <th scope="col" className="px-4 py-3">Rank</th>
+                      <th scope="col" className="px-4 py-3">Team</th>
+                      <th scope="col" className="px-4 py-3 text-right">Cash Balance</th>
+                      <th scope="col" className="px-4 py-3 text-right">Holdings Value</th>
+                      <th scope="col" className="px-4 py-3 text-right">Total Net Worth</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1e1e1e]">
+                    {leaderboard.length === 0 && (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-[#71717a]">No teams registered yet.</td></tr>
+                    )}
+                    {leaderboard.map((team, index) => (
+                      <tr key={team.id} className={index === 0 ? "bg-amber-500/10" : "bg-[#030303] hover:bg-[#18181b]"}>
+                        <td className={`px-4 py-3 font-bold ${index === 0 ? "text-amber-400" : "text-[#a1a1aa]"}`}>#{index + 1}</td>
+                        <th scope="row" className="px-4 py-3 font-bold text-white break-words">{team.teamName}</th>
+                        <td className="px-4 py-3 text-right text-white whitespace-nowrap">{formatCurrency(team.cashBalance)}</td>
+                        <td className="px-4 py-3 text-right text-[#a1a1aa] whitespace-nowrap">{formatCurrency(team.holdingsValue)}</td>
+                        <td className="px-4 py-3 text-right text-[#10B981] font-bold whitespace-nowrap">{formatCurrency(team.totalPortfolioValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               <div className="text-center text-[10px] text-[#71717a] uppercase mt-4">
@@ -534,8 +511,8 @@ export default function StageProjectorView() {
               <div
                 className={`grid gap-2.5 overflow-y-auto max-h-[520px] pr-1 ${
                   gameState?.stageAuditVisible !== false
-                    ? "grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
-                    : "grid-cols-2 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6"
+                    ? "grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+                    : "grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 2xl:grid-cols-6"
                 }`}
               >
                 {activeStocks.map((stock) => {
@@ -659,6 +636,7 @@ export default function StageProjectorView() {
 
                     <div className="text-right">
                       <div className="font-bold text-white text-xs">{formatCurrency(tx.total)}</div>
+                      {tx.commissionAmount !== undefined && <div className="text-[9px] text-rose-400">Fee: {formatCurrency(tx.commissionAmount)}</div>}
                       <div className="text-[9px] text-[#71717a]">{tx.timestamp}</div>
                     </div>
                   </div>

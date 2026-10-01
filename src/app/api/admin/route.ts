@@ -1,10 +1,13 @@
+import { randomUUID } from "node:crypto";
+import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
 import { getGameState, getInitialGameState } from "@/src/lib/db";
 import { STOCKS_DATA, ROUNDS_DATA } from "@/src/lib/market-data";
+import { snapshotFinalScores } from "@/src/lib/final-scores";
 
 const ADMIN_SECRET_PIN = "9988"; // Quick host pin
 
-export async function POST(request: Request) {
+async function execute(request: Request) {
   try {
     const { pin, action, payload } = await request.json();
 
@@ -14,11 +17,61 @@ export async function POST(request: Request) {
 
     const state = getGameState();
 
+    if (action === "START_SCORE_ANNOUNCEMENT") {
+      if (state.currentRound !== 5) {
+        return NextResponse.json({ error: "Final scores can be announced only after reaching Round 5." }, { status: 400 });
+      }
+      if (!Object.keys(state.teams).length) {
+        return NextResponse.json({ error: "Register teams before announcing scores." }, { status: 400 });
+      }
+      if (!state.scoresAnnouncement) state.scoresAnnouncement = snapshotFinalScores(state);
+      state.status = "FINISHED";
+      state.tradingExpiresAt = null;
+      state.swaps.forEach((swap) => { if (swap.status === "PENDING") swap.status = "CANCELLED"; });
+      state.directSellOffers.forEach((offer) => { if (offer.status === "PENDING") offer.status = "CANCELLED"; });
+      return NextResponse.json({ success: true, message: "Final scores frozen. Reveal teams from last place to first on /stage.", state });
+    }
+
+    if (action === "REVEAL_NEXT_SCORE") {
+      const announcement = state.scoresAnnouncement;
+      if (!announcement) return NextResponse.json({ error: "Start the final score announcement first." }, { status: 400 });
+      if (announcement.revealedCount >= announcement.teams.length) return NextResponse.json({ error: "All teams have already been announced." }, { status: 400 });
+      announcement.revealedCount += 1;
+      const team = announcement.teams[announcement.teams.length - announcement.revealedCount];
+      return NextResponse.json({ success: true, message: `Announced #${team.rank}: ${team.teamName}.`, state });
+    }
+
+    if (state.scoresAnnouncement && !["RESET_GAME", "TOGGLE_LEADERBOARD", "TOGGLE_STAGE_AUDIT"].includes(action)) {
+      return NextResponse.json({ error: "Final scores are frozen. Reset the simulation to make further game changes." }, { status: 409 });
+    }
+
+    if (action === "SET_MARKET_SELL_COMMISSION") {
+      const percent = payload?.percent;
+      if (typeof payload?.enabled !== "boolean" || typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) {
+        return NextResponse.json({ error: "Commission must be a number between 0% and 100%, with an enabled or disabled setting." }, { status: 400 });
+      }
+      state.marketSellCommissionEnabled = payload.enabled;
+      state.marketSellCommissionPercent = percent;
+      return NextResponse.json({ success: true, message: `Market-sale commission ${payload.enabled ? `set to ${percent}%` : "disabled"}. Direct trades and swaps are exempt.`, state });
+    }
+
+    if (action === "SET_NEGOTIATED_PRICES") {
+      if (typeof payload?.enabled !== "boolean") return NextResponse.json({ error: "Choose whether negotiated prices are enabled." }, { status: 400 });
+      state.negotiatedPricesEnabled = payload.enabled;
+      return NextResponse.json({ success: true, message: `Negotiated prices ${payload.enabled ? "enabled" : "disabled"} for new direct offers. Existing offers retain their agreed price.`, state });
+    }
+
+    if (action === "SET_MARKET_SELL_LOCK") {
+      if (typeof payload?.enabled !== "boolean") {
+        return NextResponse.json({ error: "Choose whether the market-sale lock is enabled." }, { status: 400 });
+      }
+      state.marketSellLockEnabled = payload.enabled;
+      return NextResponse.json({ success: true, message: `Market-sale lock ${payload.enabled ? "enabled" : "disabled"} for all teams.`, state });
+    }
+
     if (action === "RELEASE_NEWS") {
       state.status = "NEWS_RELEASED";
-      if (state.currentRound === 0) {
-        state.currentRound = 1;
-      }
+      state.tradingExpiresAt = null;
 
       // Sync and calculate prices for the active round
       const roundNum = state.currentRound;
@@ -243,11 +296,12 @@ export async function POST(request: Request) {
           liquidationSum += value;
 
           state.transactions.push({
-            id: `tx-liq-${Date.now()}-${ticker}`,
+            id: randomUUID(),
             timestamp: new Date().toLocaleTimeString(),
             round: state.currentRound,
             teamName: team.teamName,
             type: "LIQUIDATION",
+            teamId: team.id,
             ticker,
             quantity: qty,
             price,
@@ -285,7 +339,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Team Name is required." }, { status: 400 });
       }
 
-      const teamId = `team-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+      const teamId = randomUUID();
       const generatedPasscode = passcode && passcode.trim() ? passcode.trim() : Math.floor(1000 + Math.random() * 9000).toString();
 
       state.teams[teamId] = {
@@ -333,7 +387,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Team not found." }, { status: 404 });
       }
       const deletedName = state.teams[teamId].teamName;
+      Object.entries(state.teams[teamId].portfolio).forEach(([ticker, qty]) => {
+        state.stockFloats[ticker] = Math.min(100, (state.stockFloats[ticker] || 0) + qty);
+      });
       delete state.teams[teamId];
+      getGameState();
       return NextResponse.json({
         success: true,
         message: `Team "${deletedName}" deleted successfully!`,
@@ -375,7 +433,7 @@ export async function POST(request: Request) {
       let importedCount = 0;
       teams.forEach((t: any, idx: number) => {
         if (!t.teamName || !t.teamName.trim()) return;
-        const teamId = `team-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`;
+        const teamId = randomUUID();
         const pin = t.passcode && t.passcode.trim() ? t.passcode.trim() : Math.floor(1000 + Math.random() * 9000).toString();
         state.teams[teamId] = {
           id: teamId,
@@ -439,12 +497,33 @@ export async function POST(request: Request) {
 
     if (action === "RESET_GAME") {
       const fresh = getInitialGameState();
+      const keepTeams = payload?.keepTeams === true;
+      if (keepTeams) {
+        Object.values(state.teams).forEach((team) => {
+          fresh.teams[team.id] = {
+            ...team,
+            cashBalance: 100000,
+            portfolio: {},
+            isReady: false,
+            isFrozen: false,
+            peerTradesByRound: {},
+          };
+        });
+      }
       Object.assign(state, fresh);
-      return NextResponse.json({ success: true, message: "Game reset to initial state.", state });
+      return NextResponse.json({
+        success: true,
+        message: `Simulation reset. ${keepTeams ? "Teams kept with fresh balances." : "All teams removed."} Previous transactions and offers cleared.`,
+        state,
+      });
     }
 
     return NextResponse.json({ error: "Invalid admin action." }, { status: 400 });
   } catch (error) {
     return NextResponse.json({ error: "Failed to execute admin command." }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return runGameStateRequest(request, execute);
 }

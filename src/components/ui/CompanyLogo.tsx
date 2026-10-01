@@ -77,6 +77,14 @@ export function CompanyLogo({
     xl: "w-14 h-14 text-base font-bold p-2",
   };
 
+  if (!BRAND_CONFIG[ticker.toUpperCase()]) {
+    return (
+      <div className={cn("rounded-md flex items-center justify-center border border-[#FF5F1F]/30 bg-[#FF5F1F]/10 text-[#FF5F1F] font-mono font-bold flex-shrink-0", sizeClasses[size], className)} aria-label={`${ticker} fictional company`}>
+        {ticker.slice(0, 2)}
+      </div>
+    );
+  }
+
   // Robust Multi-Layer Fallback Chain:
   // 1. High-res local bundled colored SVG from /logos/
   // 2. thesvg.org CDN direct

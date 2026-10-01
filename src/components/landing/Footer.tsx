@@ -26,7 +26,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6 text-[11px] text-[#a1a1aa] uppercase tracking-wider">
+        <div className="flex flex-wrap justify-center items-center gap-3 sm:gap-6 text-[11px] text-[#a1a1aa] uppercase tracking-wider">
           <Link href="/trade" className="hover:text-[#FF5F1F] transition-colors">
             Participant Terminal
           </Link>

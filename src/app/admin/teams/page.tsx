@@ -280,7 +280,7 @@ export default function AdminTeamsManagementPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#030303] flex items-center justify-center p-4 font-mono cyber-grid">
+      <div className="responsive-page min-h-screen bg-[#030303] flex items-center justify-center p-4 font-mono cyber-grid">
         <div className="w-full max-w-sm bg-[#09090b] border border-[#27272a] p-6 rounded-xl shadow-2xl space-y-4">
           <div className="flex items-center gap-2.5 text-[#FF5F1F]">
             <div className="w-8 h-8 rounded-lg bg-[#FF5F1F]/15 border border-[#FF5F1F]/40 flex items-center justify-center">
@@ -364,7 +364,7 @@ export default function AdminTeamsManagementPage() {
   const totalCashUnderManagement = teams.reduce((acc, t) => acc + (t.totalPortfolioValue || t.cashBalance || 0), 0);
 
   return (
-    <div className="min-h-screen bg-[#030303] text-[#fafafa] font-mono select-none pb-24 cyber-grid">
+    <div className="responsive-page min-h-screen bg-[#030303] text-[#fafafa] font-mono select-none pb-24 cyber-grid">
       {/* 1. TOP CONTROL BAR */}
       <header className="sticky top-0 z-40 bg-[#09090b]/95 backdrop-blur-md border-b border-[#27272a] px-4 sm:px-6 lg:px-8 py-3.5">
         <div className="max-w-[1750px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
@@ -480,7 +480,7 @@ export default function AdminTeamsManagementPage() {
               <span>Total Assets in Play</span>
               <DollarSign className="w-4 h-4 text-[#10B981]" />
             </div>
-            <div className="text-xl sm:text-2xl font-display font-extrabold text-[#10B981]">
+            <div className="text-sm min-[400px]:text-base sm:text-2xl break-words font-display font-extrabold text-[#10B981]">
               {formatCurrency(totalCashUnderManagement)}
             </div>
             <div className="text-[10px] text-[#71717a]">Cash &amp; stock portfolios</div>
@@ -894,13 +894,13 @@ export default function AdminTeamsManagementPage() {
       {/* CREATE / EDIT TEAM MODAL */}
       <AnimatePresence>
         {isCreateModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0.88, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.88, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="w-full max-w-2xl bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="modal-panel w-full max-w-2xl bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-[#1e1e1e]">
@@ -1153,13 +1153,13 @@ export default function AdminTeamsManagementPage() {
       {/* BULK CSV IMPORT MODAL */}
       <AnimatePresence>
         {isBulkModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0.88, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.88, opacity: 0, y: 20 }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="w-full max-w-xl bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4 font-mono"
+              className="modal-panel w-full max-w-xl bg-[#09090b] border border-[#27272a] p-6 rounded-2xl shadow-2xl space-y-4 font-mono"
             >
               <div className="flex items-center justify-between pb-3 border-b border-[#1e1e1e]">
                 <div className="flex items-center gap-2">
@@ -1229,12 +1229,12 @@ export default function AdminTeamsManagementPage() {
       {/* PRINTABLE TABLE PLACARDS MODAL / PRINT SHEET */}
       <AnimatePresence>
         {isPrintModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
+          <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-4xl bg-white text-black p-8 rounded-2xl shadow-2xl space-y-6 my-8 font-sans print:p-0 print:m-0 print:shadow-none print:w-full"
+              className="modal-panel w-full max-w-4xl bg-white text-black p-8 rounded-2xl shadow-2xl space-y-6 my-8 font-sans print:p-0 print:m-0 print:shadow-none print:w-full"
             >
               {/* Screen-Only Header Bar */}
               <div className="flex items-center justify-between pb-4 border-b border-gray-200 print:hidden font-mono">
@@ -1341,8 +1341,8 @@ export default function AdminTeamsManagementPage() {
 
       {/* CASH BALANCE ADJUST MODAL */}
       {adjustModalTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="w-full max-w-sm bg-[#09090b] border border-[#27272a] p-5 rounded-xl shadow-2xl space-y-4 font-mono">
+        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="modal-panel w-full max-w-sm bg-[#09090b] border border-[#27272a] p-5 rounded-xl shadow-2xl space-y-4 font-mono">
             <div className="flex items-center justify-between pb-2 border-b border-[#1e1e1e]">
               <div>
                 <span className="text-xs text-[#FF5F1F] font-bold uppercase">Adjust Cash Balance</span>

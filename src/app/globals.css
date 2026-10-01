@@ -24,6 +24,41 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Keep dialogs inside the visible viewport, including mobile browser bars. */
+.modal-overlay {
+  height: 100dvh;
+  z-index: 80;
+  overscroll-behavior: contain;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+.modal-panel {
+  min-width: 0;
+  max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+}
+.modal-drawer { max-height: 100dvh; }
+body:has(.modal-overlay, dialog[open]) {
+  overflow: hidden;
+}
+body:has(.modal-overlay, dialog[open]) .floating-dock {
+  visibility: hidden;
+  pointer-events: none;
+}
+body:has(.modal-overlay) .demo-badge { display: none; }
+@media (max-width: 639px) {
+  .modal-panel { padding: 1rem; }
+  input, select, textarea { font-size: 16px !important; }
+  .responsive-page :where(.flex, .grid) > * { min-width: 0; }
+  .responsive-page :where(h1, h2, h3, h4, p) { overflow-wrap: anywhere; }
+}
+@media print {
+  .modal-overlay { height: auto; }
+  .modal-panel { max-height: none; overflow: visible; }
+}
+
 /* Typography styles */
 .font-display {
   font-family: var(--font-orbitron), sans-serif;
@@ -147,6 +182,26 @@ body {
 }
 .will-change-transform {
   will-change: transform, opacity, filter;
+}
+
+/* Small screens use normal document flow so pinned panels cannot crop content. */
+@media (max-width: 767px) {
+  #pinned-stage { height: auto; min-height: 0; overflow: visible; padding-top: 5rem; }
+  #pinned-stage > .absolute, #webgl-container { display: none; }
+  #pinned-stage .hero-phases { position: relative; display: flex; flex-direction: column; padding: 0 1rem; }
+  #phase-1-content, #phase-2-content, #phase-3-content {
+    position: relative; inset: auto; opacity: 1; visibility: visible;
+    filter: none; transform: none; pointer-events: auto; padding: 1rem 0;
+  }
+  #phase-2-content { display: flex; }
+  #phase-3-content { display: flex; }
+  #phase-3-intro, #hero-descriptor, #hero-ctas, #clash-title {
+    opacity: 1; visibility: visible; transform: none;
+  }
+  .clash-scroll-cue, #bridge-content { display: none; }
+  .clash-art { opacity: .2; }
+  #phase-3-content .feature-card { aspect-ratio: auto; }
+  .section-inner { padding: 40px 16px; }
 }
 
 /* Nav active state */

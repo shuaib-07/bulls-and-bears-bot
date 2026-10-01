@@ -1,8 +1,10 @@
+import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
 import { getGameState } from "@/src/lib/db";
 import { STOCKS_DATA, ROUNDS_DATA } from "@/src/lib/market-data";
+import { getPeerTradeCount, REQUIRED_PEER_TRADES } from "@/src/lib/peer-trades";
 
-export async function GET(request: Request) {
+async function execute(request: Request) {
   const url = new URL(request.url);
   const teamId = url.searchParams.get("teamId");
 
@@ -38,6 +40,8 @@ export async function GET(request: Request) {
       pnlPercent,
       isFrozen: team.isFrozen,
       isReady: team.isReady || false,
+      qualifyingPeerTrades: getPeerTradeCount(team, state.currentRound),
+      marketSellLocked: Boolean(state.marketSellLockEnabled) && getPeerTradeCount(team, state.currentRound) < REQUIRED_PEER_TRADES,
     };
   });
 
@@ -95,6 +99,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     gameState: {
+      simulationId: state.simulationId,
+      databaseRevision: state.databaseRevision,
       currentRound: state.currentRound,
       roundInfo: currentRoundData,
       status: state.status,
@@ -103,6 +109,11 @@ export async function GET(request: Request) {
       leaderboardVisible: state.leaderboardVisible,
       stageAuditVisible: state.stageAuditVisible !== undefined ? state.stageAuditVisible : true,
       serverTime: Date.now(),
+      marketSellLockEnabled: Boolean(state.marketSellLockEnabled),
+      marketSellCommissionEnabled: Boolean(state.marketSellCommissionEnabled),
+      marketSellCommissionPercent: state.marketSellCommissionPercent || 0,
+      negotiatedPricesEnabled: Boolean(state.negotiatedPricesEnabled),
+      scoresAnnouncement: state.scoresAnnouncement || null,
     },
     activeStocks,
     leaderboard,
@@ -111,4 +122,8 @@ export async function GET(request: Request) {
     swaps: state.swaps.filter((s) => s.status === "PENDING" || (teamId && (s.senderId === teamId || s.receiverId === teamId))),
     directSellOffers: relevantDirectOffers,
   });
+}
+
+export async function GET(request: Request) {
+  return runGameStateRequest(request, execute);
 }

@@ -1,12 +1,18 @@
+import { randomUUID } from "node:crypto";
+import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
 import { getGameState } from "@/src/lib/db";
 
-export async function POST(request: Request) {
+async function execute(request: Request) {
   try {
     const { action, teamName, passcode } = await request.json();
 
     if (!teamName || !passcode) {
       return NextResponse.json({ error: "Team name and passcode are required." }, { status: 400 });
+    }
+
+    if (typeof passcode !== "string" || !/^[0-9]{4}$/.test(passcode)) {
+      return NextResponse.json({ error: "PIN must contain exactly 4 digits." }, { status: 400 });
     }
 
     const cleanTeamName = teamName.trim();
@@ -37,7 +43,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Team name already taken. Please choose another name." }, { status: 409 });
       }
 
-      const newId = `team-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const newId = randomUUID();
       const newTeam = {
         id: newId,
         teamName: cleanTeamName,
@@ -55,4 +61,8 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: "Failed to process authentication." }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return runGameStateRequest(request, execute);
 }

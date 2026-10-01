@@ -9,6 +9,7 @@ import {
 import { useState } from 'react';
 import { ArrowRight, X, ShieldCheck, Clock, CheckCircle2 } from 'lucide-react';
 import useMeasure from 'react-use-measure';
+import { formatCurrency } from '@/src/lib/utils';
 
 export interface Transaction {
   id: string;
@@ -22,6 +23,9 @@ export interface Transaction {
   paymentMethod: string;
   cardNumber: string;
   cardType: string;
+  grossTotal?: number;
+  commissionAmount?: number;
+  commissionPercent?: number;
 }
 
 const springConfig: Transition = {
@@ -41,18 +45,18 @@ export function TransactionList({
   transactions: Transaction[];
 }) {
   const [open, setOpen] = useState<string | null>(null);
-  const isOpen = open === null;
   const [ref, bounds] = useMeasure();
 
   const selected = transactions.find((t) => t.id === open) ?? null;
+  const isOpen = selected === null;
 
   return (
     <MotionConfig transition={springConfig}>
       <motion.div
-        className="flex items-center justify-center overflow-hidden rounded-2xl border border-[#27272a] bg-[#09090b] shadow-2xl backdrop-blur-xl font-mono select-none"
+        className="w-full min-w-0 flex items-center justify-center overflow-hidden rounded-2xl border border-[#27272a] bg-[#09090b] shadow-2xl backdrop-blur-xl font-mono select-none"
         animate={{ height: bounds.height > 0 ? bounds.height : 'auto' }}
       >
-        <div className="p-4" ref={ref}>
+        <div className="w-full min-w-0 p-3 sm:p-4" ref={ref}>
           <AnimatePresence mode="popLayout">
             {isOpen ? (
               <motion.div
@@ -72,6 +76,9 @@ export function TransactionList({
                 </div>
 
                 <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+                  {transactions.length === 0 && (
+                    <p className="py-4 text-xs text-[#71717a] text-center">No transactions recorded yet.</p>
+                  )}
                   {transactions.map((item) => (
                     <TransactionItem
                       key={item.id}
@@ -235,6 +242,13 @@ function TransactionItemExpanded({
             <span>Execution Volume:</span>
             <span className="font-bold text-[#FF5F1F]">{data.cardNumber}</span>
           </div>
+          {data.grossTotal !== undefined && (
+            <>
+              <div className="flex justify-between text-[#71717a]"><span>Gross Proceeds:</span><span className="text-white">{formatCurrency(data.grossTotal)}</span></div>
+              <div className="flex justify-between text-[#71717a]"><span>Commission ({data.commissionPercent || 0}%):</span><span className="text-rose-400">−{formatCurrency(data.commissionAmount || 0)}</span></div>
+              <div className="flex justify-between text-[#71717a]"><span>Net Cash Received:</span><span className="text-[#10B981]">{data.amount}</span></div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 pt-1">

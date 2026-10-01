@@ -21,49 +21,8 @@ interface ActivityNotification {
   unread?: boolean;
 }
 
-const SAMPLE_NOTIFICATIONS: ActivityNotification[] = [
-  {
-    id: "1",
-    who: "Alpha Capital",
-    initials: "AC",
-    what: "executed a market BUY on",
-    context: "20 NVDA @ $180.00",
-    time: "2m",
-    type: "TRADE",
-    unread: true,
-  },
-  {
-    id: "2",
-    who: "Beta Quant",
-    initials: "BQ",
-    what: "proposed a bilateral P2P swap for",
-    context: "15 AAPL ⇄ 20 TSLA",
-    time: "8m",
-    type: "SWAP",
-    unread: true,
-  },
-  {
-    id: "3",
-    who: "Game Engine",
-    initials: "RU",
-    what: "broadcast Round 1 scenario intel",
-    context: "Semiconductor supply chain alerts",
-    time: "15m",
-    type: "NEWS",
-  },
-  {
-    id: "4",
-    who: "Gamma Ventures",
-    initials: "GV",
-    what: "exhausted market float on",
-    context: "AMD pool (100/100 acquired)",
-    time: "22m",
-    type: "TRADE",
-  },
-];
-
 export function NotificationsTimeline({
-  notifications = SAMPLE_NOTIFICATIONS,
+  notifications = [],
 }: {
   notifications?: ActivityNotification[];
 }) {
@@ -120,6 +79,9 @@ export function NotificationsTimeline({
 
       {/* Notifications List */}
       <ul className="divide-y divide-[#18181b] max-h-80 overflow-y-auto">
+        {filtered.length === 0 && (
+          <li className="px-4 py-6 text-xs text-[#71717a] text-center">No activity recorded yet.</li>
+        )}
         {filtered.map((n) => (
           <li
             key={n.id}
@@ -142,7 +104,7 @@ export function NotificationsTimeline({
                 {n.context && <strong className="text-[#d4d4d8]">{n.context}</strong>}
               </div>
               <div className="mt-1 text-[10px] text-[#71717a] flex items-center gap-2">
-                <span>{n.time} ago</span>
+                <span>{n.time}</span>
                 <span>•</span>
                 <span className="flex items-center gap-1">{getIcon(n.type)} {n.type}</span>
               </div>
