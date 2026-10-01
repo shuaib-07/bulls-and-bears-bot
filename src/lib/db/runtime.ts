@@ -1,11 +1,10 @@
 import { neon } from "@neondatabase/serverless";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { NextResponse } from "next/server";
 import { getGameState, type MemoryGameState } from "./index";
 import { gameStateContext } from "./context";
 import { STOCKS_DATA } from "../market-data";
+import { migrationSql } from "./migration";
 
 const connectionString = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 const sql = connectionString ? neon(connectionString) : null;
@@ -14,8 +13,7 @@ let initialization: Promise<void> | undefined;
 async function initialize() {
   if (!sql) return;
   initialization ??= (async () => {
-    const migration = await readFile(join(process.cwd(), "src/lib/db/migration.sql"), "utf8");
-    await sql.transaction(migration.split(";").map((statement) => statement.trim()).filter(Boolean).map((statement) => sql.query(statement)));
+    await sql.transaction(migrationSql.split(";").map((statement) => statement.trim()).filter(Boolean).map((statement) => sql.query(statement)));
     await sql`INSERT INTO game_state (id, simulation_snapshot) VALUES (1, ${JSON.stringify(getGameState())}::jsonb)
       ON CONFLICT (id) DO UPDATE SET simulation_snapshot = COALESCE(game_state.simulation_snapshot, EXCLUDED.simulation_snapshot)`;
     const rows = await sql`SELECT simulation_snapshot, revision::text FROM game_state WHERE id=1`;
@@ -56,11 +54,11 @@ async function commit(state: MemoryGameState, revision: string) {
     sql`INSERT INTO stocks (ticker,name,sector,max_supply,available_supply,current_price,entry_round,is_active)
       SELECT x->>'ticker',x->>'name',x->>'sector',100,(x->>'float')::integer,(x->>'price')::numeric,(x->>'entryRound')::integer,(x->>'active')::boolean FROM jsonb_array_elements(${stocks}::jsonb) x WHERE EXISTS (${gate})
       ON CONFLICT(ticker) DO UPDATE SET available_supply=EXCLUDED.available_supply,current_price=EXCLUDED.current_price,is_active=EXCLUDED.is_active`,
-    sql`INSERT INTO direct_sell_offers (id,seller_team_id,seller_team_name,buyer_team_id,buyer_team_name,ticker,quantity,price,total,status,expires_at,created_at,simulation_id)
-      SELECT x->>'id',x->>'sellerTeamId',x->>'sellerTeamName',x->>'buyerTeamId',x->>'buyerTeamName',x->>'ticker',(x->>'quantity')::integer,(x->>'price')::numeric,(x->>'total')::numeric,x->>'status',to_timestamp((x->>'expiresAt')::numeric/1000),to_timestamp((x->>'createdAt')::numeric/1000),${state.simulationId}::uuid FROM jsonb_array_elements(${JSON.stringify(state.directSellOffers)}::jsonb) x WHERE EXISTS (${gate})
+    sql`INSERT INTO direct_sell_offers (id,seller_team_id,seller_team_name,buyer_team_id,buyer_team_name,ticker,quantity,price,total,status,expires_at,created_at,simulation_id,round_number)
+      SELECT x->>'id',x->>'sellerTeamId',x->>'sellerTeamName',x->>'buyerTeamId',x->>'buyerTeamName',x->>'ticker',(x->>'quantity')::integer,(x->>'price')::numeric,(x->>'total')::numeric,x->>'status',to_timestamp((x->>'expiresAt')::numeric/1000),to_timestamp((x->>'createdAt')::numeric/1000),${state.simulationId}::uuid,(x->>'round')::integer FROM jsonb_array_elements(${JSON.stringify(state.directSellOffers)}::jsonb) x WHERE EXISTS (${gate})
       ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status,seller_team_name=EXCLUDED.seller_team_name,buyer_team_name=EXCLUDED.buyer_team_name`,
-    sql`INSERT INTO swap_offers (id,sender_team_id,receiver_team_id,give_ticker,give_quantity,receive_ticker,receive_quantity,status,expires_at,created_at,simulation_id)
-      SELECT x->>'id',x->>'senderId',x->>'receiverId',x->>'giveTicker',(x->>'giveQty')::integer,x->>'receiveTicker',(x->>'receiveQty')::integer,x->>'status',to_timestamp((x->>'expiresAt')::numeric/1000),to_timestamp((x->>'createdAt')::numeric/1000),${state.simulationId}::uuid FROM jsonb_array_elements(${JSON.stringify(state.swaps)}::jsonb) x WHERE EXISTS (${gate})
+    sql`INSERT INTO swap_offers (id,sender_team_id,receiver_team_id,give_ticker,give_quantity,receive_ticker,receive_quantity,status,expires_at,created_at,simulation_id,round_number)
+      SELECT x->>'id',x->>'senderId',x->>'receiverId',x->>'giveTicker',(x->>'giveQty')::integer,x->>'receiveTicker',(x->>'receiveQty')::integer,x->>'status',to_timestamp((x->>'expiresAt')::numeric/1000),to_timestamp((x->>'createdAt')::numeric/1000),${state.simulationId}::uuid,(x->>'round')::integer FROM jsonb_array_elements(${JSON.stringify(state.swaps)}::jsonb) x WHERE EXISTS (${gate})
       ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status`,
     sql`INSERT INTO transactions (id,round_number,team_id,team_name,transaction_type,ticker,quantity,price_per_share,total_amount,counterparty_team_id,counterparty_team_name,simulation_id,gross_total,commission_amount,commission_percent,display_timestamp)
       SELECT x->>'id',(x->>'round')::integer,x->>'teamId',x->>'teamName',x->>'type',x->>'ticker',(x->>'quantity')::integer,(x->>'price')::numeric,(x->>'total')::numeric,x->>'counterpartyTeamId',x->>'counterparty',${state.simulationId}::uuid,(x->>'grossTotal')::numeric,(x->>'commissionAmount')::numeric,(x->>'commissionPercent')::numeric,x->>'timestamp' FROM jsonb_array_elements(${JSON.stringify(state.transactions)}::jsonb) x WHERE EXISTS (${gate})

@@ -76,6 +76,9 @@ async function execute(request: Request) {
 
   // Auto-expire and auto-check direct sell offers
   const now = Date.now();
+  state.swaps.forEach((swap) => {
+    if (swap.status === "PENDING" && now >= swap.expiresAt) swap.status = "EXPIRED";
+  });
   (state.directSellOffers || []).forEach((offer) => {
     if (offer.status === "PENDING") {
       if (now >= offer.expiresAt) {

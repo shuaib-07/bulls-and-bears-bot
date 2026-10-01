@@ -93,6 +93,8 @@ interface TeamPortfolio {
 }
 
 interface GameStatePayload {
+  simulationId?: string;
+  databaseRevision?: number;
   currentRound: number;
   roundInfo: {
     round: number;
@@ -116,8 +118,13 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
   const [demoMarket] = useState(() => demo ? createDemoMarket() : null);
   const [guideStep, setGuideStep] = useState(0);
   const startingCash = demo ? DEMO_STARTING_CASH : 100000;
+  const simulationRef = useRef<string | null>(null);
+  const revisionRef = useRef(-1);
   const request = useCallback(async (url: string, init?: RequestInit) => {
     if (demoMarket) return requestDemo(demoMarket, url, init);
+    if ((url === "/api/trade" || url === "/api/swap") && typeof init?.body === "string") {
+      init = { ...init, body: JSON.stringify({ ...JSON.parse(init.body), simulationId: simulationRef.current }) };
+    }
     return fetch(url, init);
   }, [demoMarket]);
   // Auth state
@@ -185,6 +192,18 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
       if (!res.ok) return;
       const data = await res.json();
 
+      const revision = data.gameState.databaseRevision;
+      if (revision !== undefined && revision < revisionRef.current) return;
+      if (revision !== undefined) revisionRef.current = revision;
+      if (simulationRef.current && simulationRef.current !== data.gameState.simulationId) {
+        setOrderModal({ isOpen: false, stock: null, action: "BUY" });
+        setShowSwapModal(false);
+        setShowNewsDrawer(false);
+        setShowJournalModal(false);
+        setShowAuditModal(false);
+        setNewsCarouselIdx(null);
+      }
+      simulationRef.current = data.gameState.simulationId || null;
       setGameState(data.gameState);
       setActiveStocks(data.activeStocks);
       setAllTeams(data.leaderboard || []);
@@ -194,6 +213,10 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
 
       if (data.activeTeam) {
         setTeamData(data.activeTeam);
+      } else if (teamId && !demoMarket) {
+        setTeamData(null);
+        setTeamId(null);
+        localStorage.removeItem("bb_team_id");
       }
     } catch (e) {
       console.error("Failed to sync state", e);
@@ -488,6 +511,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "PROPOSE",
+          teamId,
           senderId: teamId,
           receiverId: targetTeamId,
           giveTicker,
@@ -526,7 +550,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
       const res = await request("/api/swap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, swapId }),
+        body: JSON.stringify({ action, swapId, teamId }),
       });
       const data = await res.json();
       if (!res.ok) {

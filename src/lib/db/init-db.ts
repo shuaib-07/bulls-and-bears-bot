@@ -1,6 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import * as dotenv from "dotenv";
 import { resolve } from "path";
+import { migrationSql } from "./migration";
 
 dotenv.config({ path: resolve(process.cwd(), ".env") });
 
@@ -128,6 +129,7 @@ export async function initializeDatabase() {
       );
     `;
 
+    await sql.transaction(migrationSql.split(";").map((statement) => statement.trim()).filter(Boolean).map((statement) => sql.query(statement)));
     console.log("✅ All PostgreSQL tables successfully created & verified on Neon DB!");
     return { success: true };
   } catch (error: any) {

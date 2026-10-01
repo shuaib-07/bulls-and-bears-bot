@@ -1,3 +1,4 @@
+export const migrationSql = `
 ALTER TABLE game_state ADD COLUMN IF NOT EXISTS simulation_snapshot JSONB;
 ALTER TABLE game_state ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE game_state ADD COLUMN IF NOT EXISTS last_write_token UUID;
@@ -11,3 +12,6 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS commission_percent NUMERIC;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS display_timestamp TEXT;
 ALTER TABLE direct_sell_offers ADD COLUMN IF NOT EXISTS simulation_id UUID;
 ALTER TABLE swap_offers ADD COLUMN IF NOT EXISTS simulation_id UUID;
+ALTER TABLE direct_sell_offers ADD COLUMN IF NOT EXISTS round_number INTEGER;
+ALTER TABLE swap_offers ADD COLUMN IF NOT EXISTS round_number INTEGER;
+`;
