@@ -45,7 +45,7 @@ function createDemoMarket() {
                 ],
             },
             status: "TRADING_OPEN", tradingExpiresAt: null,
-            marketExpanded: false, leaderboardVisible: false, serverTime: Date.now(), marketSellLockEnabled: true, marketSellCommissionEnabled: true, marketSellCommissionPercent: 2.5,
+            marketExpanded: false, leaderboardVisible: false, serverTime: Date.now(), marketSellLockEnabled: true, marketSellCommissionEnabled: true, marketSellCommissionPercent: 2.5, negotiatedPricesEnabled: true,
         },
         transactions: [],
         swaps: [],
@@ -121,7 +121,11 @@ function requestDemo(market, url, init) {
             const buyer = market.teams[body.targetTeamId];
             if (body.targetTeamId !== "MARKET_POOL" && !buyer)
                 return fail("Choose a practice buyer.");
-            if (buyer && total > buyer.cashBalance)
+            if (buyer && body.pricePerShare !== undefined && !(0, market_sale_1.isValidPeerPrice)(body.pricePerShare))
+                return fail("Enter a positive offer price with up to two decimal places.");
+            const price = buyer && market.gameState.negotiatedPricesEnabled && body.pricePerShare !== undefined ? body.pricePerShare : stock.currentPrice;
+            const offerTotal = Math.round(price * qty * 100) / 100;
+            if (buyer && offerTotal > buyer.cashBalance)
                 return fail("That practice bot does not have enough cash.");
             if (!buyer && market.gameState.marketSellLockEnabled && (0, peer_trades_1.getPeerTradeCount)(team, 1) < peer_trades_1.REQUIRED_PEER_TRADES)
                 return fail("Complete two practice trades with other teams to unlock market sales, or turn off the practice sale lock.");
@@ -129,17 +133,17 @@ function requestDemo(market, url, init) {
             if (!team.portfolio[stock.ticker])
                 delete team.portfolio[stock.ticker];
             const percent = !buyer && market.gameState.marketSellCommissionEnabled ? market.gameState.marketSellCommissionPercent : 0;
-            const sale = (0, market_sale_1.calculateMarketSale)(stock.currentPrice, qty, percent);
+            const sale = (0, market_sale_1.calculateMarketSale)(price, qty, percent);
             team.cashBalance = Number((team.cashBalance + sale.netTotal).toFixed(2));
             if (buyer) {
-                buyer.cashBalance -= total;
+                buyer.cashBalance = Number((buyer.cashBalance - offerTotal).toFixed(2));
                 buyer.portfolio[stock.ticker] = (buyer.portfolio[stock.ticker] || 0) + qty;
                 (0, peer_trades_1.recordPeerTrade)(team, 1);
                 (0, peer_trades_1.recordPeerTrade)(buyer, 1);
             }
             else
                 stock.availableSupply += qty;
-            record("SELL", stock.ticker, qty, stock.currentPrice, buyer?.teamName);
+            record("SELL", stock.ticker, qty, price, buyer?.teamName);
             if (!buyer)
                 Object.assign(market.transactions[0], { grossTotal: sale.grossTotal, commissionAmount: sale.commissionAmount, commissionPercent: percent, total: sale.netTotal });
             return ok({ sale, message: buyer ? "Practice bot accepted your direct sale. Shares and cash updated." : `Practice market sale complete. Commission: $${sale.commissionAmount.toFixed(2)}; net received: $${sale.netTotal.toFixed(2)}.` });

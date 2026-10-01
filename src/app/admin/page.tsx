@@ -37,7 +37,7 @@ import { sounds } from "@/src/lib/sounds";
 import { formatCurrency, formatNumber } from "@/src/lib/utils";
 import { ROUNDS_DATA } from "@/src/lib/market-data";
 
-const DEFAULT_PIN = "9988";
+
 
 interface NavSection {
   id: string;
@@ -65,7 +65,7 @@ const ROUND_NAMES = [
 ];
 
 export default function AdminControlCenter() {
-  const [pin, setPin] = useState(DEFAULT_PIN);
+  const [pin, setPin] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [gameState, setGameState] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -97,7 +97,7 @@ export default function AdminControlCenter() {
 
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch("/api/state");
+      const res = await fetch("/api/state", { headers: { "x-admin-pin": pin } });
       if (!res.ok) return;
       const data = await res.json();
       setGameState(data.gameState);
@@ -107,7 +107,7 @@ export default function AdminControlCenter() {
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [pin]);
 
   useEffect(() => {
     fetchState();
@@ -220,13 +220,14 @@ export default function AdminControlCenter() {
           </p>
 
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (pin === DEFAULT_PIN) {
+              const response = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin, action: "AUTHENTICATE" }) });
+              if (response.ok) {
                 setIsAuthenticated(true);
                 sounds.playTradeSuccess();
               } else {
-                alert("Incorrect PIN. (Hint: default is 9988)");
+                alert("Incorrect host PIN.");
               }
             }}
             className="space-y-4 pt-1"
@@ -237,7 +238,7 @@ export default function AdminControlCenter() {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="PIN (Default 9988)"
+                placeholder="Host PIN"
                 className="w-full bg-[#030303] border border-[#27272a] focus:border-[#FF5F1F] rounded-lg px-3.5 py-2.5 text-white outline-none text-xs tracking-widest font-bold"
                 autoFocus
               />
@@ -1061,15 +1062,9 @@ export default function AdminControlCenter() {
                   </div>
                   <p className="text-[10px] text-[#a1a1aa] mt-2 leading-relaxed">
                     {gameState?.marketSellLockEnabled
-                      ? "Each team must complete 2 direct trades or accepted swaps per round before selling to the market."
+                      ? "Each team must complete 2 accepted swaps per round before selling to the market."
                       : "Teams can sell to the market at any time during open trading."}
                   </p>
-                </button>
-                <button type="button" role="switch" aria-checked={Boolean(gameState?.negotiatedPricesEnabled)} disabled={isProcessing}
-                  onClick={() => handleAdminAction("SET_NEGOTIATED_PRICES", { enabled: !gameState?.negotiatedPricesEnabled })}
-                  className="p-4 bg-[#030303] border border-[#1e1e1e] hover:border-[#FF5F1F] rounded-xl text-left disabled:opacity-40">
-                  <div className="flex items-center justify-between gap-2 text-xs font-bold text-[#FF5F1F]"><span>Negotiated Direct-Sale Prices</span><span>{gameState?.negotiatedPricesEnabled ? "ON" : "OFF"}</span></div>
-                  <p className="text-[10px] text-[#a1a1aa] mt-2 leading-relaxed">Allow custom prices per share in new direct offers. The buyer must accept. When disabled, new offers use market prices; existing offers keep their quoted price.</p>
                 </button>
                 <div className="p-4 bg-[#030303] border border-[#1e1e1e] rounded-xl space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -1080,7 +1075,7 @@ export default function AdminControlCenter() {
                       {gameState?.marketSellCommissionEnabled ? "ON" : "OFF"}
                     </button>
                   </div>
-                  <p className="text-[10px] text-[#a1a1aa] leading-relaxed">Deducted from gross market-sale proceeds. Direct sales and swaps are exempt. Current rate: {gameState?.marketSellCommissionPercent ?? 5}%.</p>
+                  <p className="text-[10px] text-[#a1a1aa] leading-relaxed">Deducted from gross market-sale proceeds. Share swaps are exempt. Current rate: {gameState?.marketSellCommissionPercent ?? 5}%.</p>
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <label htmlFor="market-sale-commission" className="block text-[10px] text-[#71717a] mb-1">Commission percentage (0–100)</label>

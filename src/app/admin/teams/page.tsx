@@ -37,7 +37,7 @@ import { CompanyLogo } from "@/src/components/ui/CompanyLogo";
 import { sounds } from "@/src/lib/sounds";
 import { formatCurrency, formatNumber } from "@/src/lib/utils";
 
-const DEFAULT_PIN = "9988";
+
 
 interface MemberFormState {
   id: string;
@@ -48,7 +48,7 @@ interface MemberFormState {
 }
 
 export default function AdminTeamsManagementPage() {
-  const [pin, setPin] = useState(DEFAULT_PIN);
+  const [pin, setPin] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [gameState, setGameState] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
@@ -84,7 +84,7 @@ export default function AdminTeamsManagementPage() {
 
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch("/api/state");
+      const res = await fetch("/api/state", { headers: { "x-admin-pin": pin } });
       if (!res.ok) return;
       const data = await res.json();
       setGameState(data.gameState);
@@ -92,7 +92,7 @@ export default function AdminTeamsManagementPage() {
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [pin]);
 
   useEffect(() => {
     fetchState();
@@ -294,13 +294,14 @@ export default function AdminTeamsManagementPage() {
           </p>
 
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (pin === DEFAULT_PIN) {
+              const response = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin, action: "AUTHENTICATE" }) });
+              if (response.ok) {
                 setIsAuthenticated(true);
                 sounds.playTradeSuccess();
               } else {
-                alert("Incorrect PIN. (Hint: default is 9988)");
+                alert("Incorrect host PIN.");
               }
             }}
             className="space-y-4 pt-1"
@@ -311,7 +312,7 @@ export default function AdminTeamsManagementPage() {
                 type="password"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
-                placeholder="PIN (Default 9988)"
+                placeholder="Host PIN"
                 className="w-full bg-[#030303] border border-[#27272a] focus:border-[#FF5F1F] rounded-lg px-3.5 py-2.5 text-white outline-none text-xs tracking-widest font-bold"
                 autoFocus
               />

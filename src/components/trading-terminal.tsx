@@ -47,7 +47,7 @@ import { EyeTracking } from "@/src/components/ui/eye-tracking";
 import { FlippingWordSwap } from "@/src/components/ui/flipping-word-swap";
 import { createDemoMarket, requestDemo, addDemoOffers, applyDemoPriceMove, DEMO_TEAM_ID, DEMO_STARTING_CASH } from "@/src/lib/demo-market";
 import { REQUIRED_PEER_TRADES } from "@/src/lib/peer-trades";
-import { calculateMarketSale, isValidPeerPrice } from "@/src/lib/market-sale";
+import { calculateMarketSale } from "@/src/lib/market-sale";
 
 const CYCLING_STANDBY_PHRASES = [
   { w1: "TERMINAL INITIALIZED", w2: "AWAITING ROUND 0" },
@@ -59,10 +59,10 @@ const CYCLING_STANDBY_PHRASES = [
 const PRACTICE_GUIDE = [
   { title: "Portfolio", text: "Cash is available to spend. Holdings show your shares; net worth adds both together. This fictional session starts with $25,000 and two sample positions." },
   { title: "Buy", text: "Choose a stock, enter a whole number of shares, and submit a buy. Watch your cash, holdings, available float, and audit update." },
-  { title: "Sell", text: "Sell shares you own back to the market or choose a practice bot as the buyer. Bots accept direct sales immediately here; participants decide for themselves in the competition." },
+  { title: "Sell", text: "Sell shares you own back to the market at its current price. When the sale lock is enabled, complete two swaps first. Share swaps are the only way to exchange stocks with other teams." },
   { title: "News", text: "Read the fictional Pebblewick developments and consider which companies might be affected. Use Sample price move to see holdings and profit/loss respond. These headlines and prices have no connection to the competition." },
   { title: "Swap", text: "Trade owned shares for another company's shares. Choose a bot, the shares to give, and the shares to receive. Practice bots accept valid swaps immediately." },
-  { title: "Audit", text: "Inspect your practice transaction receipts. Use Sample offers to try accepting or declining an incoming swap or direct sale. Reset practice to start over." },
+  { title: "Audit", text: "Inspect your practice transaction receipts. Use Sample offers to try accepting or declining an incoming swap. Reset practice to start over." },
 ];
 
 interface ActiveStock {
@@ -140,14 +140,11 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
   const [allTeams, setAllTeams] = useState<Array<{ id: string; teamName: string; tableNumber?: string; totalPortfolioValue: number; isReady?: boolean }>>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [swaps, setSwaps] = useState<any[]>([]);
-  const [directSellOffers, setDirectSellOffers] = useState<any[]>([]);
   const [timeRemaining, setTimeRemaining] = useState<string>("10:00");
   const [phraseIdx, setPhraseIdx] = useState<number>(0);
   const [isTogglingReady, setIsTogglingReady] = useState<boolean>(false);
 
   // Direct P2P Selling State
-  const [sellTargetMode, setSellTargetMode] = useState<"DIRECT_TEAM" | "MARKET_POOL">("DIRECT_TEAM");
-  const [sellTargetTeamId, setSellTargetTeamId] = useState<string>("");
 
   // Search & Multi-Select Sector Filtering State
   const [tableSearchQuery, setTableSearchQuery] = useState("");
@@ -162,10 +159,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
     action: "BUY",
   });
   const [orderQty, setOrderQty] = useState(5);
-  const [offerPriceDraft, setOfferPriceDraft] = useState("");
-  useEffect(() => {
-    if (orderModal.isOpen && orderModal.stock) setOfferPriceDraft(orderModal.stock.currentPrice.toFixed(2));
-  }, [orderModal.isOpen, orderModal.stock?.ticker]);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
@@ -189,6 +182,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
     try {
       const url = teamId ? `/api/state?teamId=${teamId}` : `/api/state`;
       const res = await request(url);
+      if (res.status === 401) { localStorage.removeItem("bb_team_id"); setTeamId(null); setAuthError("Your login expired. Please log in again."); return; }
       if (!res.ok) return;
       const data = await res.json();
 
@@ -209,7 +203,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
       setAllTeams(data.leaderboard || []);
       setTransactions(data.transactions || []);
       setSwaps(data.swaps || []);
-      setDirectSellOffers(data.directSellOffers || []);
 
       if (data.activeTeam) {
         setTeamData(data.activeTeam);
@@ -365,17 +358,8 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
       return;
     }
 
-    if (orderModal.action === "SELL" && sellTargetMode === "MARKET_POOL" && gameState?.marketSellLockEnabled && (teamData?.qualifyingPeerTrades || 0) < REQUIRED_PEER_TRADES) {
-      toast.error("Complete two direct trades or accepted swaps this round before selling to the market.");
-      return;
-    }
-
-    if (orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && !sellTargetTeamId) {
-      toast.error("Please select a buyer team from the dropdown to sell to.");
-      return;
-    }
-    if (orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && gameState?.negotiatedPricesEnabled && !isValidPeerPrice(Number(offerPriceDraft))) {
-      setOrderError("Enter a positive offer price with up to two decimal places.");
+    if (orderModal.action === "SELL" && gameState?.marketSellLockEnabled && (teamData?.qualifyingPeerTrades || 0) < REQUIRED_PEER_TRADES) {
+      toast.error("Complete two accepted swaps this round before selling to the market.");
       return;
     }
 
@@ -392,11 +376,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
           action: orderModal.action,
           ticker: orderModal.stock.ticker,
           quantity: orderQty,
-          pricePerShare: orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && gameState?.negotiatedPricesEnabled ? Number(offerPriceDraft) : undefined,
-          targetTeamId:
-            orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM"
-              ? sellTargetTeamId
-              : "MARKET_POOL",
+          targetTeamId: "MARKET_POOL",
         }),
       });
 
@@ -411,15 +391,9 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
 
       sounds.playTradeSuccess();
       setOrderSuccess(data.message);
-      if (data.isDirectSell) {
-        toast.success(`120s Direct Sell Offer Transmitted!`, {
-          description: `Offer for ${orderQty} ${orderModal.stock.ticker} sent to counterparty. Active for 120 seconds.`,
-        });
-      } else {
         toast.success(`Executed ${orderModal.action}: ${orderQty} shares of ${orderModal.stock.ticker}`, {
           description: data.sale ? `Net cash after commission: ${formatCurrency(data.sale.netTotal)}` : `Total position value: ${formatCurrency(orderModal.stock.currentPrice * orderQty)}`,
         });
-      }
       fetchState();
       setTimeout(() => {
         setOrderModal({ isOpen: false, stock: null, action: "BUY" });
@@ -434,74 +408,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
     }
   };
 
-  // Direct Sell Offer Actions
-  const handleAcceptDirectSell = async (offerId: string) => {
-    if (!tradingAllowed) { toast.error("Trading is closed."); return; }
-    try {
-      const res = await request("/api/trade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "ACCEPT_DIRECT_SELL",
-          teamId,
-          offerId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        sounds.playTradeError();
-        toast.error(data.error || "Failed to accept sell offer.");
-        fetchState();
-        return;
-      }
-
-      sounds.playTradeSuccess();
-      toast.success(data.message || "Purchase completed! Stock added to your portfolio.");
-      fetchState();
-    } catch (e) {
-      sounds.playTradeError();
-      toast.error("Network error accepting sell offer.");
-    }
-  };
-
-  const handleRejectDirectSell = async (offerId: string) => {
-    try {
-      await request("/api/trade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "REJECT_DIRECT_SELL",
-          teamId,
-          offerId,
-        }),
-      });
-      toast.info("Declined purchase offer.");
-      fetchState();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleCancelDirectSell = async (offerId: string) => {
-    try {
-      await request("/api/trade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "CANCEL_DIRECT_SELL",
-          teamId,
-          offerId,
-        }),
-      });
-      toast.info("Direct sell offer cancelled.");
-      fetchState();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  // Swap Proposal Handler
   const handleProposeSwap = async () => {
     if (!tradingAllowed) { setSwapMessage("Trading is closed. Wait for the host to open the floor."); return; }
     if (!teamId || !targetTeamId || !giveTicker || !receiveTicker) return;
@@ -649,14 +555,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
 
   // Incoming pending swaps for this team
   const incomingSwaps = swaps.filter((s) => s.receiverId === teamId && s.status === "PENDING");
-
-  // Incoming and Outgoing 120s Direct P2P Sell Offers
-  const incomingDirectOffers = directSellOffers.filter(
-    (o) => o.buyerTeamId === teamId && o.status === "PENDING" && Date.now() < o.expiresAt
-  );
-  const outgoingDirectOffers = directSellOffers.filter(
-    (o) => o.sellerTeamId === teamId && o.status === "PENDING" && Date.now() < o.expiresAt
-  );
 
   // Dynamic Sectors & Search Filtering
   const uniqueSectors = Array.from(new Set(activeStocks.map((s) => s.sector))).filter(Boolean);
@@ -865,9 +763,8 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
   // --- 2. ACTIVE TRADING TERMINAL INTERFACE ---
   const peerTradeCount = teamData.qualifyingPeerTrades || 0;
   const marketSellLocked = Boolean(gameState?.marketSellLockEnabled) && peerTradeCount < REQUIRED_PEER_TRADES;
-  const commissionPercent = gameState?.marketSellCommissionEnabled && sellTargetMode === "MARKET_POOL" ? gameState.marketSellCommissionPercent || 0 : 0;
-  const negotiatedOffer = orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && gameState?.negotiatedPricesEnabled;
-  const orderPrice = negotiatedOffer ? Number(offerPriceDraft) : orderModal.stock?.currentPrice || 0;
+  const commissionPercent = gameState?.marketSellCommissionEnabled ? gameState.marketSellCommissionPercent || 0 : 0;
+  const orderPrice = orderModal.stock?.currentPrice || 0;
   const salePreview = orderModal.stock ? calculateMarketSale(orderPrice, orderQty, commissionPercent) : null;
   return (
     <div className="responsive-page min-h-screen bg-[#030303] text-[#fafafa] font-mono pb-32">
@@ -1011,8 +908,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
                   const stock = activeStocks.find((entry) => entry.ticker === ticker);
                   if (!stock) { toast.info("Buy some practice shares before selling."); return; }
                   setOrderQty(index === 2 ? Math.min(2, teamData.portfolio[stock.ticker]) : 2);
-                  setSellTargetMode(marketSellLocked ? "DIRECT_TEAM" : "MARKET_POOL");
-                  setSellTargetTeamId("practice-comet");
                   setOrderError(null);
                   setOrderSuccess(null);
                   setOrderModal({ isOpen: true, stock, action: index === 2 ? "SELL" : "BUY" });
@@ -1043,98 +938,6 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
 
       {/* Main Terminal Grid (Full Widescreen Desktop + Adaptive Mobile Cards) */}
       <main className="w-full px-3 sm:px-6 lg:px-8 xl:px-10 pt-4 sm:pt-6 space-y-6">
-        {/* Incoming 120s Direct Purchase Offers Alert */}
-        {incomingDirectOffers.map((offer) => {
-          const secondsRemaining = Math.max(0, Math.floor((offer.expiresAt - Date.now()) / 1000));
-          const progressPercent = Math.min(100, Math.max(0, (secondsRemaining / 120) * 100));
-
-          return (
-            <div
-              key={offer.id}
-              className="p-4 bg-gradient-to-r from-emerald-950/40 via-[#09090b] to-emerald-950/30 border-2 border-[#10B981]/50 rounded-xl shadow-[0_0_30px_rgba(16,185,129,0.2)] space-y-3 relative overflow-hidden"
-            >
-              {/* Animated Progress Timer Bar */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-[#18181b]">
-                <div
-                  className="h-full bg-gradient-to-r from-[#10B981] via-amber-400 to-[#FF5F1F] transition-all duration-1000"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-[#10B981]/20 border border-[#10B981]/50 flex items-center justify-center text-[#10B981] shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse">
-                    <Handshake className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#10B981] text-black uppercase tracking-wider">
-                        DIRECT P2P SELL OFFER
-                      </span>
-                      <span className="text-xs text-amber-400 font-bold flex items-center gap-1">
-                        <Timer className="w-3.5 h-3.5" />
-                        <span>{secondsRemaining}s remaining</span>
-                      </span>
-                    </div>
-                    <div className="text-sm font-bold text-white mt-0.5">
-                      <span className="text-[#FF5F1F]">{offer.sellerTeamName}</span> is offering to sell you{" "}
-                      <strong className="text-white">{offer.quantity} shares</strong> of{" "}
-                      <span className="text-[#10B981]">{offer.ticker}</span> @ {formatCurrency(offer.price)}!
-                    </div>
-                    <div className="text-[11px] text-[#a1a1aa]">
-                      Total Purchase Value: <strong className="text-white">{formatCurrency(offer.total)}</strong> • Direct settlement from your cash balance.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    disabled={!tradingAllowed}
-                    onClick={() => handleAcceptDirectSell(offer.id)}
-                    className="px-4 py-2 bg-[#10B981] text-black font-extrabold text-xs uppercase rounded-lg hover:bg-white transition-all shadow-[0_0_15px_rgba(16,185,129,0.4)]"
-                  >
-                    Accept &amp; Buy ({formatCurrency(offer.total)})
-                  </button>
-                  <button
-                    onClick={() => handleRejectDirectSell(offer.id)}
-                    className="px-3 py-2 bg-[#18181b] border border-[#27272a] hover:border-rose-500 text-[#a1a1aa] hover:text-rose-400 text-xs font-bold rounded-lg transition-all"
-                  >
-                    Decline
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Outgoing Pending Direct Sell Offers Notification */}
-        {outgoingDirectOffers.map((offer) => {
-          const secondsRemaining = Math.max(0, Math.floor((offer.expiresAt - Date.now()) / 1000));
-          return (
-            <div
-              key={offer.id}
-              className="p-3 bg-[#09090b] border border-[#27272a] rounded-xl flex items-center justify-between text-xs text-[#d4d4d8]"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span>
-                  Outgoing Sell Offer to <strong className="text-white">{offer.buyerTeamName}</strong>:{" "}
-                  <span className="text-[#FF5F1F] font-bold">{offer.quantity} {offer.ticker}</span> for{" "}
-                  <strong className="text-[#10B981]">{formatCurrency(offer.total)}</strong>
-                </span>
-                <span className="text-[10px] text-amber-400 font-mono">({secondsRemaining}s left)</span>
-              </div>
-
-              <button
-                onClick={() => handleCancelDirectSell(offer.id)}
-                className="text-[10px] text-[#71717a] hover:text-rose-400 underline font-semibold"
-              >
-                Cancel Offer
-              </button>
-            </div>
-          );
-        })}
-
         {/* Incoming Swap Toast Alert */}
         {incomingSwaps.length > 0 && (
           <div className="p-4 bg-gradient-to-r from-amber-500/20 via-[#FF5F1F]/10 to-transparent border border-amber-500/40 rounded-xl animate-pulse-fast flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1729,7 +1532,7 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
               <p className="font-bold">Market-sale lock: {gameState?.marketSellLockEnabled ? "ENABLED" : "DISABLED"}</p>
               {gameState?.marketSellLockEnabled ? (
                 <p className="mt-1">
-                  Round {gameState.currentRound}: {peerTradeCount}/{REQUIRED_PEER_TRADES} qualifying peer trades.
+                  Round {gameState.currentRound}: {peerTradeCount}/{REQUIRED_PEER_TRADES} qualifying accepted swaps.
                   {marketSellLocked ? ` Complete ${REQUIRED_PEER_TRADES - peerTradeCount} more direct trade(s) or accepted swap(s) to unlock market sales.` : " Market sales are unlocked for your team."}
                   {" "}Market buys are allowed and do not count toward unlocking.
                 </p>
@@ -1884,85 +1687,15 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
 
               {/* Counterparty Team Selector for SELL action */}
               {orderModal.action === "SELL" && (
-                <div className="p-3 bg-[#030303] border border-[#27272a] rounded-lg space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] text-[#FF5F1F] uppercase font-bold tracking-wider">
-                      Sell Destination / Buyer Team
-                    </label>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#FF5F1F]/10 text-[#FF5F1F] font-bold">
-                      120s P2P TRADE
-                    </span>
-                  </div>
-
-                  {/* Mode selector: Direct Team vs Market Pool */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSellTargetMode("DIRECT_TEAM")}
-                      className={`py-1.5 px-2 rounded text-[11px] font-bold transition-all ${
-                        sellTargetMode === "DIRECT_TEAM"
-                          ? "bg-[#FF5F1F] text-black shadow-sm"
-                          : "bg-[#09090b] text-[#71717a] border border-[#1e1e1e] hover:text-white"
-                      }`}
-                    >
-                      🤝 Direct to Team (120s)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSellTargetMode("MARKET_POOL")}
-                      disabled={marketSellLocked}
-                      title={marketSellLocked ? "Complete 2 peer trades this round to unlock market sales" : "Sell shares back to the market"}
-                      className={`py-1.5 px-2 rounded text-[11px] font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-                        sellTargetMode === "MARKET_POOL"
-                          ? "bg-[#27272a] text-white"
-                          : "bg-[#09090b] text-[#71717a] border border-[#1e1e1e] hover:text-white"
-                      }`}
-                    >
-                      🏛️ Market Pool
-                    </button>
-                  </div>
-
-                  {sellTargetMode === "DIRECT_TEAM" && (
-                    <div className="space-y-1.5 pt-1">
-                      <label className="block text-[10px] text-[#71717a] uppercase font-bold">
-                        Choose Counterparty Team to Buy These Shares:
-                      </label>
-                      <select
-                        value={sellTargetTeamId}
-                        onChange={(e) => setSellTargetTeamId(e.target.value)}
-                        className="w-full bg-[#09090b] border border-[#27272a] focus:border-[#FF5F1F] rounded-lg px-3 py-2 text-white text-xs font-semibold outline-none"
-                      >
-                        <option value="">Select a buyer team...</option>
-                        {allTeams
-                          .filter((t) => t.id !== teamId)
-                          .map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.teamName} ({t.tableNumber || "Station"})
-                            </option>
-                          ))}
-                      </select>
-                      <p className="text-[10px] text-[#71717a] leading-tight">
-                        *This sell request will be transmitted to the selected team with an active <strong>120-second countdown</strong>. If another team acquires these shares before they accept, this offer will automatically cancel.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && (
-                <div className="p-3 rounded-lg border border-[#27272a] bg-[#030303] space-y-2">
-                  <p className="text-xs font-bold text-[#FF5F1F]">Negotiated pricing: {gameState?.negotiatedPricesEnabled ? "ENABLED" : "DISABLED"}</p>
-                  {gameState?.negotiatedPricesEnabled ? <>
-                    <label htmlFor="direct-offer-price" className="block text-xs text-[#a1a1aa]">Offer price per share ($)</label>
-                    <input id="direct-offer-price" type="number" inputMode="decimal" min="0.01" max="99999999.99" step="0.01" value={offerPriceDraft} onChange={(event) => setOfferPriceDraft(event.target.value)} className="w-full rounded-lg border border-[#27272a] px-3 py-2 bg-[#09090b] text-white text-sm" />
-                    <p className="text-[10px] text-[#71717a]">Market reference: {formatCurrency(orderModal.stock.currentPrice)} per share. The buyer must accept your price; pending offers keep this price until they expire.</p>
-                  </> : <p className="text-xs text-[#a1a1aa]">New direct offers use the current market price.</p>}
+                <div className="p-3 rounded-lg border border-[#27272a] bg-[#030303] text-xs space-y-1">
+                  <p className="font-bold text-white">Sell destination: Market pool</p>
+                  <p className="text-[#a1a1aa]">Shares sell at the current market price. To exchange shares with another team, propose a swap.</p>
                 </div>
               )}
 
               {orderModal.action === "SELL" && salePreview && (
                 <div className="p-3 bg-[#030303] border border-[#27272a] rounded-lg space-y-2 text-xs">
-                  <p className="text-[#a1a1aa]">Market commission: {gameState?.marketSellCommissionEnabled ? `${gameState.marketSellCommissionPercent}% enabled` : "disabled"}. {sellTargetMode === "DIRECT_TEAM" && "Direct sales are exempt."}</p>
+                  <p className="text-[#a1a1aa]">Market commission: {gameState?.marketSellCommissionEnabled ? `${gameState.marketSellCommissionPercent}% enabled` : "disabled"}.</p>
                   <div className="flex justify-between"><span className="text-[#71717a]">Gross sale proceeds</span><span>{formatCurrency(salePreview.grossTotal)}</span></div>
                   <div className="flex justify-between"><span className="text-[#71717a]">Commission ({commissionPercent}%)</span><span className="text-rose-400">−{formatCurrency(salePreview.commissionAmount)}</span></div>
                 </div>
@@ -1978,11 +1711,9 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
                 onClick={handleExecuteOrder}
                 disabled={
                   isSubmittingOrder || !tradingAllowed ||
-                  (Boolean(negotiatedOffer) && !isValidPeerPrice(Number(offerPriceDraft))) ||
-                  (orderModal.action === "SELL" && sellTargetMode === "MARKET_POOL" && marketSellLocked) ||
+                  (orderModal.action === "SELL" && marketSellLocked) ||
                   (orderModal.action === "BUY" && orderModal.stock.availableSupply === 0) ||
-                  (orderModal.action === "SELL" && (!teamData?.portfolio[orderModal.stock.ticker] || teamData?.portfolio[orderModal.stock.ticker] === 0)) ||
-                  (orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM" && !sellTargetTeamId)
+                  (orderModal.action === "SELL" && (!teamData?.portfolio[orderModal.stock.ticker] || teamData?.portfolio[orderModal.stock.ticker] === 0))
                 }
                 className={`w-full py-3 font-bold uppercase rounded-lg text-xs tracking-wider transition-all ${
                   orderModal.action === "BUY"
@@ -1996,10 +1727,8 @@ export default function TradingTerminal({ demo = false }: { demo?: boolean }) {
                   ? "Trading Closed — Orders Locked"
                   : orderModal.action === "SELL" && (!teamData?.portfolio[orderModal.stock.ticker] || teamData?.portfolio[orderModal.stock.ticker] === 0)
                   ? "Cannot Sell (0 Shares Owned)"
-                  : orderModal.action === "SELL" && sellTargetMode === "MARKET_POOL" && marketSellLocked
-                  ? "Market Sale Locked — Complete 2 Peer Trades"
-                  : orderModal.action === "SELL" && sellTargetMode === "DIRECT_TEAM"
-                  ? `Send 120s Sell Offer to ${allTeams.find((t) => t.id === sellTargetTeamId)?.teamName || "Selected Team"} →`
+                  : orderModal.action === "SELL" && marketSellLocked
+                  ? "Market Sale Locked — Complete 2 Accepted Swaps"
                   : `Confirm ${orderModal.action} (${orderQty} Shares of ${orderModal.stock.ticker})`}
               </button>
             </div>

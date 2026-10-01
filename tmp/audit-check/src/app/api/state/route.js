@@ -1,14 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GET = GET;
+const session_1 = require("@/src/lib/session");
+const runtime_1 = require("@/src/lib/db/runtime");
 const server_1 = require("next/server");
 const db_1 = require("@/src/lib/db");
 const market_data_1 = require("@/src/lib/market-data");
 const peer_trades_1 = require("@/src/lib/peer-trades");
-async function GET(request) {
+async function execute(request) {
     const url = new URL(request.url);
     const teamId = url.searchParams.get("teamId");
     const state = (0, db_1.getGameState)();
+    const isAdmin = request.headers.get("x-admin-pin") === (0, session_1.adminPin)();
+    if (teamId && !(0, session_1.isTeamAuthenticated)(request, state.teams[teamId]))
+        return server_1.NextResponse.json({ error: "Your login expired. Please log in again." }, { status: 401 });
     // Automatically transition to TRADING_CLOSED when timer countdown hits 0
     if (state.status === "TRADING_OPEN" && state.tradingExpiresAt && Date.now() >= state.tradingExpiresAt) {
         state.status = "TRADING_CLOSED";
@@ -26,9 +31,9 @@ async function GET(request) {
         return {
             id: team.id,
             teamName: team.teamName,
-            passcode: team.passcode,
+            ...(isAdmin ? { passcode: team.passcode } : {}),
             tableNumber: team.tableNumber || `Table ${team.id.slice(0, 4)}`,
-            members: team.members || [],
+            members: isAdmin ? team.members || [] : [],
             cashBalance: team.cashBalance,
             portfolio: team.portfolio,
             holdingsValue,
@@ -62,13 +67,21 @@ async function GET(request) {
             return true;
         return state.marketExpanded || state.currentRound >= 2;
     }).map((s) => ({
-        ...s,
+        ...(isAdmin ? s : { ticker: s.ticker, name: s.name, sector: s.sector, startingPrice: s.startingPrice, entryRound: s.entryRound }),
         currentPrice: state.stockPrices[s.ticker] || s.startingPrice,
         availableSupply: state.stockFloats[s.ticker] !== undefined ? state.stockFloats[s.ticker] : 100,
-        roundChangePercent: customShifts[s.ticker] !== undefined ? customShifts[s.ticker] : (currentRoundData.marketChanges[s.ticker] || 0),
+        roundChangePercent: (() => {
+            const previousRound = `r${Math.max(0, state.currentRound - 1)}`;
+            const baseline = state.priceUpdateBases?.[state.currentRound]?.[s.ticker] || s.prices[previousRound] || s.startingPrice;
+            return Math.round(((state.stockPrices[s.ticker] || s.startingPrice) / baseline - 1) * 10000) / 100;
+        })(),
     }));
     // Auto-expire and auto-check direct sell offers
     const now = Date.now();
+    state.swaps.forEach((swap) => {
+        if (swap.status === "PENDING" && now >= swap.expiresAt)
+            swap.status = "EXPIRED";
+    });
     (state.directSellOffers || []).forEach((offer) => {
         if (offer.status === "PENDING") {
             if (now >= offer.expiresAt) {
@@ -87,8 +100,10 @@ async function GET(request) {
     const activeTeam = teamId ? teamsList.find((t) => t.id === teamId) || null : null;
     return server_1.NextResponse.json({
         gameState: {
+            simulationId: state.simulationId,
+            databaseRevision: state.databaseRevision,
             currentRound: state.currentRound,
-            roundInfo: currentRoundData,
+            roundInfo: isAdmin ? currentRoundData : { ...currentRoundData, marketChanges: {}, newsStories: state.status === "SETUP" ? [] : currentRoundData.newsStories.map((story) => ({ ...story, sector: "", clueSummary: state.currentRound === 0 ? story.clueSummary : "" })) },
             status: state.status,
             tradingExpiresAt: state.tradingExpiresAt,
             marketExpanded: state.marketExpanded,
@@ -98,13 +113,19 @@ async function GET(request) {
             marketSellLockEnabled: Boolean(state.marketSellLockEnabled),
             marketSellCommissionEnabled: Boolean(state.marketSellCommissionEnabled),
             marketSellCommissionPercent: state.marketSellCommissionPercent || 0,
+            negotiatedPricesEnabled: Boolean(state.negotiatedPricesEnabled),
             scoresAnnouncement: state.scoresAnnouncement || null,
+            ...(isAdmin ? { customScenarios: state.customScenarios || {}, customPriceShifts: state.customPriceShifts || {} } : {}),
         },
         activeStocks,
+        ...(isAdmin ? { stocks: activeStocks } : {}),
         leaderboard,
         activeTeam,
         transactions: state.transactions.slice(-50).reverse(),
         swaps: state.swaps.filter((s) => s.status === "PENDING" || (teamId && (s.senderId === teamId || s.receiverId === teamId))),
         directSellOffers: relevantDirectOffers,
     });
+}
+async function GET(request) {
+    return (0, runtime_1.runGameStateRequest)(request, execute);
 }

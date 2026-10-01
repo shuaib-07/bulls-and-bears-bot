@@ -11,7 +11,7 @@ async function run() {
   state.teams.b = { id: "b", teamName: "Buyer", passcode: "2345", cashBalance: 1000, portfolio: {}, isFrozen: false };
   state.stockPrices.AAPL = 100;
   state.stockFloats.AAPL = 80;
-  const request = (body: object) => new Request("http://localhost/api/test", { method: "POST", body: JSON.stringify(body) });
+  const request = (body: object) => new Request("http://localhost/api/test", { method: "POST", body: JSON.stringify({ simulationId: state.simulationId, ...body }) });
   const command = (action: string, payload: object = {}) => admin(request({ pin: "9988", action, payload }));
   const sell = (quantity: number, targetTeamId = "MARKET_POOL") => trade(request({ teamId: "a", action: "SELL", ticker: "AAPL", quantity, targetTeamId, commissionPercent: 0 }));
   assert.equal(state.marketSellCommissionEnabled, true);

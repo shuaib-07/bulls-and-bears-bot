@@ -1,17 +1,21 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.POST = POST;
+const session_1 = require("@/src/lib/session");
+const node_crypto_1 = require("node:crypto");
+const runtime_1 = require("@/src/lib/db/runtime");
 const server_1 = require("next/server");
 const db_1 = require("@/src/lib/db");
 const market_data_1 = require("@/src/lib/market-data");
 const final_scores_1 = require("@/src/lib/final-scores");
-const ADMIN_SECRET_PIN = "9988"; // Quick host pin
-async function POST(request) {
+async function execute(request) {
     try {
         const { pin, action, payload } = await request.json();
-        if (pin !== ADMIN_SECRET_PIN) {
+        if (pin !== (0, session_1.adminPin)()) {
             return server_1.NextResponse.json({ error: "Unauthorized: Invalid Admin PIN." }, { status: 401 });
         }
+        if (action === "AUTHENTICATE")
+            return server_1.NextResponse.json({ success: true });
         const state = (0, db_1.getGameState)();
         if (action === "START_SCORE_ANNOUNCEMENT") {
             if (state.currentRound !== 5) {
@@ -52,6 +56,12 @@ async function POST(request) {
             state.marketSellCommissionPercent = percent;
             return server_1.NextResponse.json({ success: true, message: `Market-sale commission ${payload.enabled ? `set to ${percent}%` : "disabled"}. Direct trades and swaps are exempt.`, state });
         }
+        if (action === "SET_NEGOTIATED_PRICES") {
+            if (typeof payload?.enabled !== "boolean")
+                return server_1.NextResponse.json({ error: "Choose whether negotiated prices are enabled." }, { status: 400 });
+            state.negotiatedPricesEnabled = payload.enabled;
+            return server_1.NextResponse.json({ success: true, message: `Negotiated prices ${payload.enabled ? "enabled" : "disabled"} for new direct offers. Existing offers retain their agreed price.`, state });
+        }
         if (action === "SET_MARKET_SELL_LOCK") {
             if (typeof payload?.enabled !== "boolean") {
                 return server_1.NextResponse.json({ error: "Choose whether the market-sale lock is enabled." }, { status: 400 });
@@ -62,28 +72,16 @@ async function POST(request) {
         if (action === "RELEASE_NEWS") {
             state.status = "NEWS_RELEASED";
             state.tradingExpiresAt = null;
-            // Sync and calculate prices for the active round
-            const roundNum = state.currentRound;
-            const roundKey = `r${roundNum}`;
-            const customShifts = state.customPriceShifts?.[roundNum] || {};
-            market_data_1.STOCKS_DATA.forEach((s) => {
-                if (customShifts[s.ticker] !== undefined) {
-                    const shiftPct = customShifts[s.ticker];
-                    const currentPrice = state.stockPrices[s.ticker] || s.startingPrice;
-                    state.stockPrices[s.ticker] = Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2)));
-                }
-                else if (s.prices[roundKey] !== undefined) {
-                    state.stockPrices[s.ticker] = s.prices[roundKey];
-                }
-            });
             return server_1.NextResponse.json({
                 success: true,
-                message: `Step 1 complete: News released for Round ${state.currentRound}! Stock prices updated and intelligence live.`,
+                message: `Step 1 complete: News released for Round ${state.currentRound}! Intelligence is live; trading remains closed.`,
                 state,
             });
         }
         if (action === "OPEN_TRADING") {
-            const minutes = payload?.minutes || 10;
+            const minutes = payload?.minutes ?? 10;
+            if (typeof minutes !== "number" || !Number.isFinite(minutes) || minutes <= 0 || minutes > 1440)
+                return server_1.NextResponse.json({ error: "Trading duration must be between 0 and 1440 minutes." }, { status: 400 });
             state.status = "TRADING_OPEN";
             state.tradingExpiresAt = Date.now() + minutes * 60 * 1000;
             return server_1.NextResponse.json({ success: true, message: `Trading window OPEN for ${minutes} minutes!`, state });
@@ -94,6 +92,10 @@ async function POST(request) {
             return server_1.NextResponse.json({ success: true, message: "Trading closed and market locked.", state });
         }
         if (action === "APPLY_PRICE_UPDATE") {
+            if (state.status === "TRADING_OPEN")
+                return server_1.NextResponse.json({ error: "Close trading before applying market shifts." }, { status: 409 });
+            state.priceUpdateBases ??= {};
+            state.priceUpdateBases[state.currentRound] ??= { ...state.stockPrices };
             const roundNum = state.currentRound;
             const roundKey = `r${roundNum}`;
             const roundChanges = state.customPriceShifts?.[roundNum] || market_data_1.ROUNDS_DATA.find((r) => r.round === roundNum)?.marketChanges || {};
@@ -101,8 +103,8 @@ async function POST(request) {
                 // If a custom percentage shift was set by the admin
                 if (state.customPriceShifts?.[roundNum] && state.customPriceShifts[roundNum][s.ticker] !== undefined) {
                     const shiftPct = state.customPriceShifts[roundNum][s.ticker];
-                    const currentPrice = state.stockPrices[s.ticker] || s.startingPrice;
-                    state.stockPrices[s.ticker] = Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2)));
+                    const currentPrice = state.priceUpdateBases[roundNum][s.ticker] || s.startingPrice;
+                    state.stockPrices[s.ticker] = Math.min(99999999.99, Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2))));
                 }
                 else if (s.prices[roundKey] !== undefined) {
                     state.stockPrices[s.ticker] = s.prices[roundKey];
@@ -112,6 +114,8 @@ async function POST(request) {
         }
         if (action === "UPDATE_CUSTOM_SCENARIO") {
             const { round, title, subtitle, newsStories } = payload;
+            if (!Number.isInteger(round) || round < 0 || round > 5 || typeof title !== "string" || typeof subtitle !== "string" || !Array.isArray(newsStories) || newsStories.some((story) => !story || typeof story.headline !== "string" || !Number.isInteger(story.id)))
+                return server_1.NextResponse.json({ error: "Choose a valid round, title, subtitle and news stories." }, { status: 400 });
             if (!state.customScenarios)
                 state.customScenarios = {};
             state.customScenarios[round] = {
@@ -123,6 +127,8 @@ async function POST(request) {
         }
         if (action === "UPDATE_PRICE_SHIFTS") {
             const { round, shifts } = payload;
+            if (!Number.isInteger(round) || round < 0 || round > 5 || !shifts || typeof shifts !== "object" || Object.entries(shifts).some(([ticker, percent]) => !market_data_1.STOCKS_DATA.some((stock) => stock.ticker === ticker) || typeof percent !== "number" || !Number.isFinite(percent) || percent <= -100 || percent > 1000000))
+                return server_1.NextResponse.json({ error: "Choose a valid round, ticker and finite percentage greater than -100%." }, { status: 400 });
             if (!state.customPriceShifts)
                 state.customPriceShifts = {};
             state.customPriceShifts[round] = {
@@ -142,7 +148,11 @@ async function POST(request) {
             return server_1.NextResponse.json({ success: true, message: `Round ${round} scenario reset to default!`, state });
         }
         if (action === "EXTEND_TIMER") {
-            const extraMinutes = Number(payload?.minutes) || 2;
+            const extraMinutes = payload?.minutes ?? 2;
+            if (typeof extraMinutes !== "number" || !Number.isFinite(extraMinutes) || extraMinutes <= 0 || extraMinutes > 1440)
+                return server_1.NextResponse.json({ error: "Timer extension must be between 0 and 1440 minutes." }, { status: 400 });
+            if (state.status !== "TRADING_OPEN" || !state.tradingExpiresAt || state.tradingExpiresAt <= Date.now())
+                return server_1.NextResponse.json({ error: "Open trading before extending the timer." }, { status: 409 });
             const now = Date.now();
             if (state.status !== "TRADING_OPEN" || !state.tradingExpiresAt) {
                 state.status = "TRADING_OPEN";
@@ -191,7 +201,9 @@ async function POST(request) {
             }
         }
         if (action === "SET_ROUND") {
-            const targetRound = Math.max(0, Math.min(5, Number(payload?.round) ?? 0));
+            const targetRound = payload?.round;
+            if (!Number.isInteger(targetRound) || targetRound < 0 || targetRound > 5)
+                return server_1.NextResponse.json({ error: "Choose a round from 0 to 5." }, { status: 400 });
             state.currentRound = targetRound;
             state.status = "SETUP";
             state.tradingExpiresAt = null;
@@ -211,7 +223,7 @@ async function POST(request) {
                 else if (customShifts[s.ticker] !== undefined) {
                     const shiftPct = customShifts[s.ticker];
                     const currentPrice = state.stockPrices[s.ticker] || s.startingPrice;
-                    state.stockPrices[s.ticker] = Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2)));
+                    state.stockPrices[s.ticker] = Math.min(99999999.99, Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2))));
                 }
                 else if (s.prices[roundKey] !== undefined) {
                     state.stockPrices[s.ticker] = s.prices[roundKey];
@@ -226,29 +238,17 @@ async function POST(request) {
         if (action === "ADVANCE_ROUND") {
             if (state.currentRound < 5) {
                 state.currentRound += 1;
+                state.priceUpdateBases ??= {};
+                state.priceUpdateBases[state.currentRound] = { ...state.stockPrices };
                 state.status = "SETUP";
                 state.tradingExpiresAt = null;
                 // If reaching round 2, auto activate expansion
                 if (state.currentRound >= 2) {
                     state.marketExpanded = true;
                 }
-                // Automatically sync and apply prices for the new round
-                const targetRound = state.currentRound;
-                const roundKey = `r${targetRound}`;
-                const customShifts = state.customPriceShifts?.[targetRound] || {};
-                market_data_1.STOCKS_DATA.forEach((s) => {
-                    if (customShifts[s.ticker] !== undefined) {
-                        const shiftPct = customShifts[s.ticker];
-                        const currentPrice = state.stockPrices[s.ticker] || s.startingPrice;
-                        state.stockPrices[s.ticker] = Math.max(1, parseFloat((currentPrice * (1 + shiftPct / 100)).toFixed(2)));
-                    }
-                    else if (s.prices[roundKey] !== undefined) {
-                        state.stockPrices[s.ticker] = s.prices[roundKey];
-                    }
-                });
                 return server_1.NextResponse.json({
                     success: true,
-                    message: `Advanced to Round ${state.currentRound}! Stock prices synchronized and new round intelligence ready.`,
+                    message: `Advanced to Round ${state.currentRound}! New round intelligence ready; market shifts remain a separate step.`,
                     state,
                 });
             }
@@ -268,8 +268,9 @@ async function POST(request) {
                     const price = state.stockPrices[ticker] || 0;
                     const value = price * qty;
                     liquidationSum += value;
+                    state.stockFloats[ticker] = (state.stockFloats[ticker] || 0) + qty;
                     state.transactions.push({
-                        id: `tx-liq-${Date.now()}-${ticker}`,
+                        id: (0, node_crypto_1.randomUUID)(),
                         timestamp: new Date().toLocaleTimeString(),
                         round: state.currentRound,
                         teamName: team.teamName,
@@ -281,10 +282,15 @@ async function POST(request) {
                         total: value,
                     });
                 });
-                team.cashBalance += liquidationSum;
+                team.cashBalance = Math.round((team.cashBalance + liquidationSum) * 100) / 100;
                 team.portfolio = {};
             });
             state.status = "FINISHED";
+            state.tradingExpiresAt = null;
+            state.swaps.forEach((offer) => { if (offer.status === "PENDING")
+                offer.status = "CANCELLED"; });
+            state.directSellOffers.forEach((offer) => { if (offer.status === "PENDING")
+                offer.status = "CANCELLED"; });
             state.leaderboardVisible = true;
             return server_1.NextResponse.json({ success: true, message: "Final liquidation complete! All assets converted to cash.", state });
         }
@@ -302,16 +308,22 @@ async function POST(request) {
         }
         if (action === "CREATE_TEAM") {
             const { teamName, passcode, initialCash, tableNumber, members } = payload;
-            if (!teamName || !teamName.trim()) {
+            if (typeof teamName !== "string" || !teamName.trim()) {
                 return server_1.NextResponse.json({ error: "Team Name is required." }, { status: 400 });
             }
-            const teamId = `team-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+            if (Object.values(state.teams).some((team) => team.teamName.toLowerCase() === teamName.trim().toLowerCase()))
+                return server_1.NextResponse.json({ error: "Team name is already registered." }, { status: 400 });
+            if (passcode && (typeof passcode !== "string" || !/^\d{4}$/.test(passcode)))
+                return server_1.NextResponse.json({ error: "PIN must contain four digits." }, { status: 400 });
+            if (initialCash !== undefined && (!Number.isFinite(Number(initialCash)) || Number(initialCash) < 0 || Number(initialCash) > 9999999999.99))
+                return server_1.NextResponse.json({ error: "Initial cash must be a valid non-negative amount." }, { status: 400 });
+            const teamId = (0, node_crypto_1.randomUUID)();
             const generatedPasscode = passcode && passcode.trim() ? passcode.trim() : Math.floor(1000 + Math.random() * 9000).toString();
             state.teams[teamId] = {
                 id: teamId,
                 teamName: teamName.trim(),
                 passcode: generatedPasscode,
-                cashBalance: Number(initialCash) || 100000,
+                cashBalance: initialCash === undefined ? 100000 : Math.round(Number(initialCash) * 100) / 100,
                 isFrozen: false,
                 tableNumber: tableNumber || `Table ${Object.keys(state.teams).length + 1}`,
                 members: Array.isArray(members) ? members : [],
@@ -329,12 +341,18 @@ async function POST(request) {
             if (!state.teams[teamId]) {
                 return server_1.NextResponse.json({ error: "Team not found." }, { status: 404 });
             }
+            if (teamName !== undefined && (typeof teamName !== "string" || !teamName.trim() || Object.values(state.teams).some((team) => team.id !== teamId && team.teamName.toLowerCase() === teamName.trim().toLowerCase())))
+                return server_1.NextResponse.json({ error: "Choose a unique, non-empty team name." }, { status: 400 });
+            if (passcode && (typeof passcode !== "string" || !/^\d{4}$/.test(passcode)))
+                return server_1.NextResponse.json({ error: "PIN must contain four digits." }, { status: 400 });
+            if (cashBalance !== undefined && (!Number.isFinite(Number(cashBalance)) || Number(cashBalance) < 0 || Number(cashBalance) > 9999999999.99))
+                return server_1.NextResponse.json({ error: "Cash must be a valid non-negative amount." }, { status: 400 });
             if (teamName && teamName.trim())
                 state.teams[teamId].teamName = teamName.trim();
             if (passcode && passcode.trim())
                 state.teams[teamId].passcode = passcode.trim();
             if (cashBalance !== undefined && !isNaN(Number(cashBalance)))
-                state.teams[teamId].cashBalance = Number(cashBalance);
+                state.teams[teamId].cashBalance = Math.round(Number(cashBalance) * 100) / 100;
             if (tableNumber !== undefined)
                 state.teams[teamId].tableNumber = tableNumber;
             if (members !== undefined && Array.isArray(members))
@@ -393,17 +411,23 @@ async function POST(request) {
             if (!Array.isArray(teams) || teams.length === 0) {
                 return server_1.NextResponse.json({ error: "No valid teams provided for import." }, { status: 400 });
             }
+            const names = new Set(Object.values(state.teams).map((team) => team.teamName.toLowerCase()));
+            for (const team of teams) {
+                if (typeof team?.teamName !== "string" || !team.teamName.trim() || names.has(team.teamName.trim().toLowerCase()) || (team.passcode && (typeof team.passcode !== "string" || !/^\d{4}$/.test(team.passcode))) || (team.cashBalance !== undefined && (!Number.isFinite(Number(team.cashBalance)) || Number(team.cashBalance) < 0 || Number(team.cashBalance) > 9999999999.99)))
+                    return server_1.NextResponse.json({ error: "Import requires unique team names, four-digit PINs and valid non-negative cash amounts. No teams were imported." }, { status: 400 });
+                names.add(team.teamName.trim().toLowerCase());
+            }
             let importedCount = 0;
             teams.forEach((t, idx) => {
                 if (!t.teamName || !t.teamName.trim())
                     return;
-                const teamId = `team-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`;
+                const teamId = (0, node_crypto_1.randomUUID)();
                 const pin = t.passcode && t.passcode.trim() ? t.passcode.trim() : Math.floor(1000 + Math.random() * 9000).toString();
                 state.teams[teamId] = {
                     id: teamId,
                     teamName: t.teamName.trim(),
                     passcode: pin,
-                    cashBalance: Number(t.cashBalance) || 100000,
+                    cashBalance: t.cashBalance === undefined ? 100000 : Math.round(Number(t.cashBalance) * 100) / 100,
                     isFrozen: false,
                     tableNumber: t.tableNumber || `Table ${Object.keys(state.teams).length + 1}`,
                     members: Array.isArray(t.members) ? t.members : [],
@@ -427,7 +451,10 @@ async function POST(request) {
         if (action === "ADJUST_BALANCE") {
             const { teamId, cashDelta } = payload;
             if (state.teams[teamId]) {
-                state.teams[teamId].cashBalance += Number(cashDelta) || 0;
+                const next = state.teams[teamId].cashBalance + Number(cashDelta);
+                if (!Number.isFinite(next) || next < 0 || next > 9999999999.99)
+                    return server_1.NextResponse.json({ error: "Adjustment would produce an invalid cash balance." }, { status: 400 });
+                state.teams[teamId].cashBalance = Math.round(next * 100) / 100;
             }
             return server_1.NextResponse.json({ success: true, message: "Cash balance adjusted.", state });
         }
@@ -481,4 +508,7 @@ async function POST(request) {
     catch (error) {
         return server_1.NextResponse.json({ error: "Failed to execute admin command." }, { status: 500 });
     }
+}
+async function POST(request) {
+    return (0, runtime_1.runGameStateRequest)(request, execute);
 }

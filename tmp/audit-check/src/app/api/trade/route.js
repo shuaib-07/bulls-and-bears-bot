@@ -1,14 +1,22 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.POST = POST;
+const session_1 = require("@/src/lib/session");
+const node_crypto_1 = require("node:crypto");
+const runtime_1 = require("@/src/lib/db/runtime");
 const server_1 = require("next/server");
 const db_1 = require("@/src/lib/db");
 const peer_trades_1 = require("@/src/lib/peer-trades");
 const market_sale_1 = require("@/src/lib/market-sale");
-async function POST(request) {
+const market_data_1 = require("@/src/lib/market-data");
+async function execute(request) {
     try {
-        const { teamId, action, ticker, quantity, targetTeamId, offerId } = await request.json();
+        const { teamId, action, ticker, quantity, targetTeamId, offerId, pricePerShare, simulationId } = await request.json();
         const state = (0, db_1.getGameState)();
+        if (!(0, session_1.isTeamAuthenticated)(request, state.teams[teamId]))
+            return server_1.NextResponse.json({ error: "Your login expired. Please log in again." }, { status: 401 });
+        if (simulationId !== state.simulationId)
+            return server_1.NextResponse.json({ error: "The simulation was reset. Refresh your terminal before trading." }, { status: 409 });
         // 0. Toggle Team Readiness (Allowed in SETUP / Standby)
         if (action === "TOGGLE_READY") {
             const team = state.teams[teamId];
@@ -26,7 +34,7 @@ async function POST(request) {
         if (state.status !== "TRADING_OPEN") {
             return server_1.NextResponse.json({ error: "Trading is currently CLOSED. Wait for the host to open the trading window." }, { status: 403 });
         }
-        if (state.tradingExpiresAt && Date.now() > state.tradingExpiresAt) {
+        if (state.tradingExpiresAt && Date.now() >= state.tradingExpiresAt) {
             state.status = "TRADING_CLOSED";
             return server_1.NextResponse.json({ error: "Round trading time has EXPIRED! Market is locked." }, { status: 403 });
         }
@@ -64,6 +72,8 @@ async function POST(request) {
                 offer.status = "CANCELLED";
                 return server_1.NextResponse.json({ error: "Seller team is no longer active." }, { status: 400 });
             }
+            if (seller.isFrozen)
+                return server_1.NextResponse.json({ error: "The seller team is frozen." }, { status: 403 });
             // Verify seller STILL owns the shares (Collision / multi-team buy check)
             const currentSellerShares = seller.portfolio[offer.ticker] || 0;
             if (currentSellerShares < offer.quantity) {
@@ -81,9 +91,9 @@ async function POST(request) {
             if (seller.portfolio[offer.ticker] <= 0) {
                 delete seller.portfolio[offer.ticker];
             }
-            seller.cashBalance += offer.total;
+            seller.cashBalance = Number((seller.cashBalance + offer.total).toFixed(2));
             team.portfolio[offer.ticker] = (team.portfolio[offer.ticker] || 0) + offer.quantity;
-            team.cashBalance -= offer.total;
+            team.cashBalance = Number((team.cashBalance - offer.total).toFixed(2));
             offer.status = "ACCEPTED";
             (0, peer_trades_1.recordPeerTrade)(seller, state.currentRound);
             (0, peer_trades_1.recordPeerTrade)(team, state.currentRound);
@@ -99,12 +109,12 @@ async function POST(request) {
                 }
             });
             state.transactions.push({
-                id: `tx-p2p-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                id: (0, node_crypto_1.randomUUID)(),
                 timestamp: new Date().toLocaleTimeString(),
                 round: state.currentRound,
                 teamId: team.id,
                 teamName: team.teamName,
-                type: "SWAP",
+                type: "DIRECT_SELL",
                 ticker: offer.ticker,
                 quantity: offer.quantity,
                 price: offer.price,
@@ -123,7 +133,7 @@ async function POST(request) {
         // -------------------------------------------------------------------------
         if (action === "REJECT_DIRECT_SELL") {
             const offer = (state.directSellOffers || []).find((o) => o.id === offerId);
-            if (offer) {
+            if (offer && offer.buyerTeamId === team.id && offer.status === "PENDING") {
                 offer.status = "REJECTED";
             }
             return server_1.NextResponse.json({ success: true, message: "Sell offer declined." });
@@ -133,20 +143,21 @@ async function POST(request) {
         // -------------------------------------------------------------------------
         if (action === "CANCEL_DIRECT_SELL") {
             const offer = (state.directSellOffers || []).find((o) => o.id === offerId);
-            if (offer && offer.sellerTeamId === team.id) {
+            if (offer && offer.sellerTeamId === team.id && offer.status === "PENDING") {
                 offer.status = "CANCELLED";
             }
             return server_1.NextResponse.json({ success: true, message: "Sell offer cancelled." });
         }
-        const qty = parseInt(quantity, 10);
-        if (isNaN(qty) || qty <= 0) {
+        const qty = quantity;
+        if (!Number.isSafeInteger(qty) || qty <= 0) {
             return server_1.NextResponse.json({ error: "Quantity must be a positive integer." }, { status: 400 });
         }
         const price = state.stockPrices[ticker];
-        if (!price) {
+        const stock = market_data_1.STOCKS_DATA.find((item) => item.ticker === ticker);
+        if (!stock || !(stock.entryRound === 0 || state.marketExpanded || state.currentRound >= 2) || typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
             return server_1.NextResponse.json({ error: `Stock ${ticker} not found in active market.` }, { status: 404 });
         }
-        const totalCost = price * qty;
+        const totalCost = Math.round(price * qty * 100) / 100;
         // -------------------------------------------------------------------------
         // ACTION: BUY FROM OPEN MARKET FLOAT
         // -------------------------------------------------------------------------
@@ -159,11 +170,11 @@ async function POST(request) {
                 return server_1.NextResponse.json({ error: `Insufficient cash! Total cost is $${totalCost.toLocaleString()}, but your balance is $${team.cashBalance.toLocaleString()}.` }, { status: 400 });
             }
             // Execute BUY
-            team.cashBalance -= totalCost;
+            team.cashBalance = Math.round((team.cashBalance - totalCost) * 100) / 100;
             state.stockFloats[ticker] -= qty;
             team.portfolio[ticker] = (team.portfolio[ticker] || 0) + qty;
             state.transactions.push({
-                id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                id: (0, node_crypto_1.randomUUID)(),
                 timestamp: new Date().toLocaleTimeString(),
                 round: state.currentRound,
                 teamName: team.teamName,
@@ -198,19 +209,28 @@ async function POST(request) {
                 if (targetTeam.id === team.id) {
                     return server_1.NextResponse.json({ error: "Cannot sell shares to your own team." }, { status: 400 });
                 }
+                if (pricePerShare !== undefined && !(0, market_sale_1.isValidPeerPrice)(pricePerShare)) {
+                    return server_1.NextResponse.json({ error: "Offer price must be positive, with at most two decimal places." }, { status: 400 });
+                }
+                if (!state.negotiatedPricesEnabled && pricePerShare !== undefined && pricePerShare !== price) {
+                    return server_1.NextResponse.json({ error: "Negotiated prices are disabled. Use the current market price for a new offer." }, { status: 409 });
+                }
+                const offerPrice = state.negotiatedPricesEnabled && pricePerShare !== undefined ? pricePerShare : price;
+                const offerTotal = Math.round(offerPrice * qty * 100) / 100;
                 const newOffer = {
-                    id: `offer-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+                    id: (0, node_crypto_1.randomUUID)(),
                     sellerTeamId: team.id,
                     sellerTeamName: team.teamName,
                     buyerTeamId: targetTeam.id,
                     buyerTeamName: targetTeam.teamName,
                     ticker,
                     quantity: qty,
-                    price,
-                    total: totalCost,
+                    price: offerPrice,
+                    total: offerTotal,
                     status: "PENDING",
                     expiresAt: Date.now() + 120 * 1000, // 120 seconds countdown
                     createdAt: Date.now(),
+                    round: state.currentRound,
                 };
                 if (!state.directSellOffers)
                     state.directSellOffers = [];
@@ -250,7 +270,7 @@ async function POST(request) {
                 }
             });
             state.transactions.push({
-                id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                id: (0, node_crypto_1.randomUUID)(),
                 timestamp: new Date().toLocaleTimeString(),
                 round: state.currentRound,
                 teamName: team.teamName,
@@ -277,4 +297,7 @@ async function POST(request) {
     catch (error) {
         return server_1.NextResponse.json({ error: "Failed to execute order." }, { status: 500 });
     }
+}
+async function POST(request) {
+    return (0, runtime_1.runGameStateRequest)(request, execute);
 }

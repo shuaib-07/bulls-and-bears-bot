@@ -68,7 +68,10 @@ async function commit(state: MemoryGameState, revision: string) {
 }
 
 export async function runGameStateRequest(request: Request, handler: (request: Request) => Promise<Response>): Promise<Response> {
-  if (!sql) return handler(request);
+  if (!sql) {
+    if (process.env.VERCEL) return NextResponse.json({ error: "Database connection is not configured for this deployment." }, { status: 503 });
+    return handler(request);
+  }
   try {
     await initialize();
     for (let attempt = 0; attempt < 20; attempt++) {

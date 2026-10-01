@@ -40,12 +40,19 @@ export default function AdminFlowSpecification() {
   const [viewMode, setViewMode] = useState<"round" | "matrix" | "editor">("round");
 
   // Custom Scenario Editor State for selected round
-  const [adminPin, setAdminPin] = useState("9988");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
   const [customTitle, setCustomTitle] = useState("");
   const [customSubtitle, setCustomSubtitle] = useState("");
   const [customNews, setCustomNews] = useState<Array<{ id: number; headline: string; sector: string; clueSummary: string }>>([]);
   const [customShifts, setCustomShifts] = useState<Record<string, number>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState<Record<number, any>>({});
+  const [savedShifts, setSavedShifts] = useState<Record<number, Record<string, number>>>({});
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch("/api/state", { headers: { "x-admin-pin": adminPin } }).then((response) => response.json()).then((data) => { setSavedScenarios(data.gameState.customScenarios || {}); setSavedShifts(data.gameState.customPriceShifts || {}); });
+  }, [isAuthenticated, adminPin]);
 
   const sectors = ["ALL", ...Array.from(new Set(STOCKS_DATA.map((s) => s.sector)))];
 
@@ -53,11 +60,11 @@ export default function AdminFlowSpecification() {
 
   // Initialize editor whenever selected round changes
   useEffect(() => {
-    setCustomTitle(roundInfo.title);
-    setCustomSubtitle(roundInfo.subtitle);
-    setCustomNews(JSON.parse(JSON.stringify(roundInfo.newsStories)));
-    setCustomShifts({ ...roundInfo.marketChanges });
-  }, [selectedRound, roundInfo]);
+    setCustomTitle(savedScenarios[selectedRound]?.title || roundInfo.title);
+    setCustomSubtitle(savedScenarios[selectedRound]?.subtitle || roundInfo.subtitle);
+    setCustomNews(JSON.parse(JSON.stringify(savedScenarios[selectedRound]?.newsStories || roundInfo.newsStories)));
+    setCustomShifts({ ...roundInfo.marketChanges, ...savedShifts[selectedRound] });
+  }, [selectedRound, roundInfo, savedScenarios, savedShifts]);
 
   // Save custom scenario & price shifts to server
   const handleSaveScenario = async () => {
@@ -94,6 +101,8 @@ export default function AdminFlowSpecification() {
       });
 
       if (resScenario.ok && resShifts.ok) {
+        setSavedScenarios((previous) => ({ ...previous, [selectedRound]: { title: customTitle, subtitle: customSubtitle, newsStories: customNews } }));
+        setSavedShifts((previous) => ({ ...previous, [selectedRound]: { ...customShifts } }));
         toast.success(`Custom Scenario & Price Shifts saved for Round ${selectedRound}!`);
       } else {
         toast.error("Failed to save custom scenario. Verify Admin PIN.");
@@ -199,6 +208,20 @@ export default function AdminFlowSpecification() {
 
   const biggestGainer = [...roundChangesList].sort((a, b) => b.pct - a.pct)[0];
   const biggestLoser = [...roundChangesList].sort((a, b) => a.pct - b.pct)[0];
+
+  if (!isAuthenticated) return (
+    <main className="min-h-screen bg-[#030303] text-white grid place-items-center p-4">
+      <form className="w-full max-w-sm space-y-4 rounded-xl border border-[#27272a] p-6" onSubmit={async (event) => {
+        event.preventDefault();
+        const response = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: adminPin, action: "AUTHENTICATE" }) });
+        if (response.ok) setIsAuthenticated(true); else toast.error("Incorrect host PIN.");
+      }}>
+        <h1 className="text-xl">Host authorization</h1>
+        <label className="block">Host PIN<input type="password" value={adminPin} onChange={(event) => setAdminPin(event.target.value)} className="mt-2 block w-full rounded border border-[#27272a] bg-black p-3 text-base" required /></label>
+        <button className="w-full rounded bg-[#ff5f1f] p-3 text-black">Open master plan</button>
+      </form>
+    </main>
+  );
 
   return (
     <div className="responsive-page min-h-screen bg-[#030303] text-[#fafafa] font-mono p-4 sm:p-6 lg:p-10 select-none cyber-grid print:bg-white print:text-black print:p-0">

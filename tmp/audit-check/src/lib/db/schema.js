@@ -8,6 +8,8 @@ exports.teams = (0, pg_core_1.pgTable)("teams", {
     passcode: (0, pg_core_1.text)("passcode").notNull(),
     cashBalance: (0, pg_core_1.numeric)("cash_balance", { precision: 12, scale: 2 }).default("100000.00").notNull(),
     isFrozen: (0, pg_core_1.boolean)("is_frozen").default(false).notNull(),
+    isReady: (0, pg_core_1.boolean)("is_ready").default(false).notNull(),
+    peerTradesByRound: (0, pg_core_1.jsonb)("peer_trades_by_round").$type().default({}).notNull(),
     tableNumber: (0, pg_core_1.text)("table_number"),
     portfolio: (0, pg_core_1.jsonb)("portfolio").$type().default({}).notNull(),
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
@@ -32,6 +34,10 @@ exports.stocks = (0, pg_core_1.pgTable)("stocks", {
     isActive: (0, pg_core_1.boolean)("is_active").default(true).notNull(),
 });
 exports.gameState = (0, pg_core_1.pgTable)("game_state", {
+    simulationId: (0, pg_core_1.uuid)("simulation_id"),
+    simulationSnapshot: (0, pg_core_1.jsonb)("simulation_snapshot"),
+    revision: (0, pg_core_1.bigint)("revision", { mode: "number" }).default(0).notNull(),
+    lastWriteToken: (0, pg_core_1.uuid)("last_write_token"),
     id: (0, pg_core_1.integer)("id").primaryKey().default(1),
     currentRound: (0, pg_core_1.integer)("current_round").default(0).notNull(),
     status: (0, pg_core_1.text)("status").default("SETUP").notNull(), // SETUP, NEWS_RELEASED, TRADING_OPEN, TRADING_CLOSED, FINISHED
@@ -46,6 +52,8 @@ exports.gameState = (0, pg_core_1.pgTable)("game_state", {
     updatedAt: (0, pg_core_1.timestamp)("updated_at").defaultNow().notNull(),
 });
 exports.directSellOffers = (0, pg_core_1.pgTable)("direct_sell_offers", {
+    simulationId: (0, pg_core_1.uuid)("simulation_id"),
+    roundNumber: (0, pg_core_1.integer)("round_number"),
     id: (0, pg_core_1.text)("id").primaryKey(),
     sellerTeamId: (0, pg_core_1.text)("seller_team_id").references(() => exports.teams.id, { onDelete: "cascade" }).notNull(),
     sellerTeamName: (0, pg_core_1.text)("seller_team_name").notNull(),
@@ -60,6 +68,8 @@ exports.directSellOffers = (0, pg_core_1.pgTable)("direct_sell_offers", {
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
 });
 exports.swapOffers = (0, pg_core_1.pgTable)("swap_offers", {
+    simulationId: (0, pg_core_1.uuid)("simulation_id"),
+    roundNumber: (0, pg_core_1.integer)("round_number"),
     id: (0, pg_core_1.text)("id").primaryKey(),
     senderTeamId: (0, pg_core_1.text)("sender_team_id").references(() => exports.teams.id, { onDelete: "cascade" }).notNull(),
     receiverTeamId: (0, pg_core_1.text)("receiver_team_id").references(() => exports.teams.id, { onDelete: "cascade" }).notNull(),
@@ -72,6 +82,11 @@ exports.swapOffers = (0, pg_core_1.pgTable)("swap_offers", {
     createdAt: (0, pg_core_1.timestamp)("created_at").defaultNow().notNull(),
 });
 exports.transactions = (0, pg_core_1.pgTable)("transactions", {
+    simulationId: (0, pg_core_1.uuid)("simulation_id"),
+    grossTotal: (0, pg_core_1.numeric)("gross_total", { precision: 12, scale: 2 }),
+    commissionAmount: (0, pg_core_1.numeric)("commission_amount", { precision: 12, scale: 2 }),
+    commissionPercent: (0, pg_core_1.numeric)("commission_percent"),
+    displayTimestamp: (0, pg_core_1.text)("display_timestamp"),
     id: (0, pg_core_1.text)("id").primaryKey(),
     roundNumber: (0, pg_core_1.integer)("round_number").notNull(),
     teamId: (0, pg_core_1.text)("team_id").references(() => exports.teams.id, { onDelete: "cascade" }).notNull(),

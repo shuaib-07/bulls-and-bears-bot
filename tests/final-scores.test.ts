@@ -27,7 +27,7 @@ async function run() {
   assert.equal(snapshot.revealedCount, 0);
   assert.equal((await command("OPEN_TRADING")).status, 409);
   assert.equal((await command("EXTEND_TIMER")).status, 409);
-  assert.equal((await trade(new Request("http://localhost/api/trade", { method: "POST", body: JSON.stringify({ teamId: "a", action: "BUY", ticker: "AAPL", quantity: 1 }) }))).status, 403);
+  assert.equal((await trade(new Request("http://localhost/api/trade", { method: "POST", body: JSON.stringify({ simulationId: state.simulationId, teamId: "a", action: "BUY", ticker: "AAPL", quantity: 1 }) }))).status, 403);
   const frozen = JSON.stringify(snapshot.teams);
   state.stockPrices.AAPL = 200;
   state.teams.a.cashBalance = 0;

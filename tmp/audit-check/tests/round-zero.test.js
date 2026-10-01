@@ -24,7 +24,7 @@ async function run() {
     strict_1.default.equal(snapshot.gameState.roundInfo.round, 0);
     strict_1.default.ok(snapshot.gameState.roundInfo.newsStories.length > 0);
     strict_1.default.equal((await (0, route_2.POST)(new Request("http://localhost/api/trade", {
-        method: "POST", body: JSON.stringify({ action: "BUY", teamId: "round-test", ticker: "AAPL", quantity: 1 }),
+        method: "POST", body: JSON.stringify({ simulationId: state.simulationId, action: "BUY", teamId: "round-test", ticker: "AAPL", quantity: 1 }),
     }))).status, 403);
     strict_1.default.equal((await command("OPEN_TRADING", { minutes: 10 })).status, 200);
     strict_1.default.equal(state.currentRound, 0);
@@ -37,6 +37,14 @@ async function run() {
     strict_1.default.equal(state.currentRound, 1);
     strict_1.default.equal((await command("RELEASE_NEWS")).status, 200);
     strict_1.default.equal(state.currentRound, 1);
+    const before = state.stockPrices.AAPL;
+    await command("UPDATE_PRICE_SHIFTS", { round: 1, shifts: { AAPL: 10 } });
+    await command("RELEASE_NEWS");
+    strict_1.default.equal(state.stockPrices.AAPL, before);
+    await command("APPLY_PRICE_UPDATE");
+    strict_1.default.equal(state.stockPrices.AAPL, Math.round(before * 1.1 * 100) / 100);
+    await command("APPLY_PRICE_UPDATE");
+    strict_1.default.equal(state.stockPrices.AAPL, Math.round(before * 1.1 * 100) / 100);
     console.log("Round checks passed: Round 0 news, closed reading period, manual trading start, and explicit round advance.");
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

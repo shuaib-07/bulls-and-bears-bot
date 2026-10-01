@@ -20,7 +20,7 @@ async function run() {
   assert.equal(snapshot.gameState.roundInfo.round, 0);
   assert.ok(snapshot.gameState.roundInfo.newsStories.length > 0);
   assert.equal((await trade(new Request("http://localhost/api/trade", {
-    method: "POST", body: JSON.stringify({ action: "BUY", teamId: "round-test", ticker: "AAPL", quantity: 1 }),
+    method: "POST", body: JSON.stringify({ simulationId: state.simulationId, action: "BUY", teamId: "round-test", ticker: "AAPL", quantity: 1 }),
   }))).status, 403);
   assert.equal((await command("OPEN_TRADING", { minutes: 10 })).status, 200);
   assert.equal(state.currentRound, 0);
@@ -33,6 +33,14 @@ async function run() {
   assert.equal(state.currentRound, 1);
   assert.equal((await command("RELEASE_NEWS")).status, 200);
   assert.equal(state.currentRound, 1);
+  const before = state.stockPrices.AAPL;
+  await command("UPDATE_PRICE_SHIFTS", { round: 1, shifts: { AAPL: 10 } });
+  await command("RELEASE_NEWS");
+  assert.equal(state.stockPrices.AAPL, before);
+  await command("APPLY_PRICE_UPDATE");
+  assert.equal(state.stockPrices.AAPL, Math.round(before * 1.1 * 100) / 100);
+  await command("APPLY_PRICE_UPDATE");
+  assert.equal(state.stockPrices.AAPL, Math.round(before * 1.1 * 100) / 100);
   console.log("Round checks passed: Round 0 news, closed reading period, manual trading start, and explicit round advance.");
 }
 

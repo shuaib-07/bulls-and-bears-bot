@@ -18,7 +18,7 @@ async function run() {
     }
     state.stockFloats.AAPL = 70;
     state.stockFloats.MSFT = 70;
-    const request = (route, body) => new Request(`http://localhost/api/${route}`, { method: "POST", body: JSON.stringify(body) });
+    const request = (route, body) => new Request(`http://localhost/api/${route}`, { method: "POST", body: JSON.stringify({ simulationId: state.simulationId, ...body }) });
     const command = (action, payload = {}) => (0, route_1.POST)(request("admin", { pin: "9988", action, payload }));
     const sell = (teamId, targetTeamId = "MARKET_POOL") => (0, route_2.POST)(request("trade", { action: "SELL", teamId, ticker: "AAPL", quantity: 1, targetTeamId }));
     const count = (id) => (0, peer_trades_1.getPeerTradeCount)(state.teams[id], state.currentRound);
@@ -43,12 +43,12 @@ async function run() {
     strict_1.default.equal((await (0, route_2.POST)(request("trade", { action: "ACCEPT_DIRECT_SELL", teamId: "b", offerId: response.offer.id }))).status, 400);
     strict_1.default.equal(count("a"), 1);
     strict_1.default.equal((await sell("a")).status, 403);
-    const proposal = await (await (0, route_3.POST)(request("swap", { action: "PROPOSE", senderId: "b", receiverId: "a", giveTicker: "MSFT", giveQty: 1, receiveTicker: "AAPL", receiveQty: 1 }))).json();
+    const proposal = await (await (0, route_3.POST)(request("swap", { action: "PROPOSE", teamId: "b", senderId: "b", receiverId: "a", giveTicker: "MSFT", giveQty: 1, receiveTicker: "AAPL", receiveQty: 1 }))).json();
     strict_1.default.equal(count("b"), 1);
-    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", swapId: proposal.swap.id }))).status, 200);
+    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", teamId: "a", swapId: proposal.swap.id }))).status, 200);
     strict_1.default.equal(count("a"), 2);
     strict_1.default.equal(count("b"), 2);
-    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", swapId: proposal.swap.id }))).status, 400);
+    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", teamId: "a", swapId: proposal.swap.id }))).status, 400);
     strict_1.default.equal(count("b"), 2);
     strict_1.default.equal((await sell("a")).status, 200);
     strict_1.default.equal((await sell("c")).status, 403);
@@ -64,9 +64,9 @@ async function run() {
     strict_1.default.equal((await sell("a")).status, 200);
     await command("SET_MARKET_SELL_LOCK", { enabled: true });
     strict_1.default.equal((await sell("a")).status, 403);
-    const expiring = await (await (0, route_3.POST)(request("swap", { action: "PROPOSE", senderId: "b", receiverId: "a", giveTicker: "MSFT", giveQty: 1, receiveTicker: "AAPL", receiveQty: 1 }))).json();
+    const expiring = await (await (0, route_3.POST)(request("swap", { action: "PROPOSE", teamId: "b", senderId: "b", receiverId: "a", giveTicker: "MSFT", giveQty: 1, receiveTicker: "AAPL", receiveQty: 1 }))).json();
     state.swaps.find((offer) => offer.id === expiring.swap.id).expiresAt = 0;
-    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", swapId: expiring.swap.id }))).status, 400);
+    strict_1.default.equal((await (0, route_3.POST)(request("swap", { action: "ACCEPT", teamId: "a", swapId: expiring.swap.id }))).status, 400);
     strict_1.default.equal(count("a"), 0);
     await command("RESET_GAME", { keepTeams: true });
     strict_1.default.equal(state.marketSellLockEnabled, true);

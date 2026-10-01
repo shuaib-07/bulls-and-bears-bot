@@ -1,3 +1,4 @@
+import { teamSession } from "@/src/lib/session";
 import { randomUUID } from "node:crypto";
 import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
@@ -15,6 +16,7 @@ async function execute(request: Request) {
       return NextResponse.json({ error: "PIN must contain exactly 4 digits." }, { status: 400 });
     }
 
+    if (typeof teamName !== "string" || !teamName.trim()) return NextResponse.json({ error: "Team name is required." }, { status: 400 });
     const cleanTeamName = teamName.trim();
     const state = getGameState();
 
@@ -31,14 +33,14 @@ async function execute(request: Request) {
       if (team.passcode !== passcode) {
         return NextResponse.json({ error: "Incorrect passcode." }, { status: 401 });
       }
-      return NextResponse.json({ success: true, team });
+      return loginResponse(team);
     }
 
     if (action === "register") {
       if (existingKey) {
         // If password matches, treat as login
         if (state.teams[existingKey].passcode === passcode) {
-          return NextResponse.json({ success: true, team: state.teams[existingKey] });
+          return loginResponse(state.teams[existingKey]);
         }
         return NextResponse.json({ error: "Team name already taken. Please choose another name." }, { status: 409 });
       }
@@ -54,7 +56,7 @@ async function execute(request: Request) {
       };
 
       state.teams[newId] = newTeam;
-      return NextResponse.json({ success: true, team: newTeam });
+      return loginResponse(newTeam);
     }
 
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
@@ -65,4 +67,11 @@ async function execute(request: Request) {
 
 export async function POST(request: Request) {
   return runGameStateRequest(request, execute);
+}
+
+function loginResponse(team: import("@/src/lib/db").MemoryTeam) {
+  const { passcode, ...publicTeam } = team;
+  const response = NextResponse.json({ success: true, team: publicTeam });
+  response.cookies.set("bb_team", teamSession(team), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 43200 });
+  return response;
 }

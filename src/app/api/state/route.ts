@@ -1,3 +1,4 @@
+import { adminPin, isTeamAuthenticated } from "@/src/lib/session";
 import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
 import { getGameState } from "@/src/lib/db";
@@ -9,6 +10,8 @@ async function execute(request: Request) {
   const teamId = url.searchParams.get("teamId");
 
   const state = getGameState();
+  const isAdmin = request.headers.get("x-admin-pin") === adminPin();
+  if (teamId && !isTeamAuthenticated(request, state.teams[teamId])) return NextResponse.json({ error: "Your login expired. Please log in again." }, { status: 401 });
 
   // Automatically transition to TRADING_CLOSED when timer countdown hits 0
   if (state.status === "TRADING_OPEN" && state.tradingExpiresAt && Date.now() >= state.tradingExpiresAt) {
@@ -29,9 +32,9 @@ async function execute(request: Request) {
     return {
       id: team.id,
       teamName: team.teamName,
-      passcode: team.passcode,
+      ...(isAdmin ? { passcode: team.passcode } : {}),
       tableNumber: team.tableNumber || `Table ${team.id.slice(0, 4)}`,
-      members: team.members || [],
+      members: isAdmin ? team.members || [] : [],
       cashBalance: team.cashBalance,
       portfolio: team.portfolio,
       holdingsValue,
@@ -68,10 +71,14 @@ async function execute(request: Request) {
     if (s.entryRound === 0) return true;
     return state.marketExpanded || state.currentRound >= 2;
   }).map((s) => ({
-    ...s,
+    ...(isAdmin ? s : { ticker: s.ticker, name: s.name, sector: s.sector, startingPrice: s.startingPrice, entryRound: s.entryRound }),
     currentPrice: state.stockPrices[s.ticker] || s.startingPrice,
     availableSupply: state.stockFloats[s.ticker] !== undefined ? state.stockFloats[s.ticker] : 100,
-    roundChangePercent: customShifts[s.ticker] !== undefined ? customShifts[s.ticker] : (currentRoundData.marketChanges[s.ticker] || 0),
+    roundChangePercent: (() => {
+      const previousRound = `r${Math.max(0, state.currentRound - 1)}` as keyof typeof s.prices;
+      const baseline = state.priceUpdateBases?.[state.currentRound]?.[s.ticker] || s.prices[previousRound] || s.startingPrice;
+      return Math.round(((state.stockPrices[s.ticker] || s.startingPrice) / baseline - 1) * 10000) / 100;
+    })(),
   }));
 
   // Auto-expire and auto-check direct sell offers
@@ -105,7 +112,7 @@ async function execute(request: Request) {
       simulationId: state.simulationId,
       databaseRevision: state.databaseRevision,
       currentRound: state.currentRound,
-      roundInfo: currentRoundData,
+      roundInfo: isAdmin ? currentRoundData : { ...currentRoundData, marketChanges: {}, newsStories: state.status === "SETUP" ? [] : currentRoundData.newsStories.map((story) => ({ ...story, sector: "", clueSummary: state.currentRound === 0 ? story.clueSummary : "" })) },
       status: state.status,
       tradingExpiresAt: state.tradingExpiresAt,
       marketExpanded: state.marketExpanded,
@@ -117,8 +124,10 @@ async function execute(request: Request) {
       marketSellCommissionPercent: state.marketSellCommissionPercent || 0,
       negotiatedPricesEnabled: Boolean(state.negotiatedPricesEnabled),
       scoresAnnouncement: state.scoresAnnouncement || null,
+      ...(isAdmin ? { customScenarios: state.customScenarios || {}, customPriceShifts: state.customPriceShifts || {} } : {}),
     },
     activeStocks,
+    ...(isAdmin ? { stocks: activeStocks } : {}),
     leaderboard,
     activeTeam,
     transactions: state.transactions.slice(-50).reverse(),

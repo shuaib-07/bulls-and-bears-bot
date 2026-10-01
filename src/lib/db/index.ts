@@ -63,6 +63,7 @@ export interface MemoryGameState {
   marketSellCommissionEnabled?: boolean;
   marketSellCommissionPercent?: number;
   negotiatedPricesEnabled?: boolean;
+  peerTradeRule?: "SWAPS_ONLY";
   scoresAnnouncement?: ScoresAnnouncement | null;
   stockPrices: Record<string, number>;
   stockFloats: Record<string, number>; // remaining available float
@@ -71,6 +72,7 @@ export interface MemoryGameState {
     subtitle?: string;
     newsStories?: Array<{ id: number; headline: string; sector: string; clueSummary: string }>;
   }>;
+  priceUpdateBases?: Record<number, Record<string, number>>;
   customPriceShifts?: Record<number, Record<string, number>>; // round -> { ticker -> percentChange }
   teams: Record<string, MemoryTeam>;
   transactions: Array<{
@@ -131,12 +133,14 @@ export function getInitialGameState(): MemoryGameState {
     marketSellLockEnabled: true,
     marketSellCommissionEnabled: true,
     marketSellCommissionPercent: 5,
-    negotiatedPricesEnabled: true,
+    negotiatedPricesEnabled: false,
+    peerTradeRule: "SWAPS_ONLY",
     scoresAnnouncement: null,
     stockPrices,
     stockFloats,
     customScenarios: {},
     customPriceShifts: {},
+    priceUpdateBases: {},
     directSellOffers: [],
     teams: {},
     transactions: [],
@@ -153,7 +157,7 @@ export function getGameState(): MemoryGameState {
   state.marketSellLockEnabled ??= true;
   state.marketSellCommissionEnabled ??= true;
   state.marketSellCommissionPercent ??= 5;
-  state.negotiatedPricesEnabled ??= true;
+  state.negotiatedPricesEnabled = false;
   const teamsByName = new Map(Object.values(state.teams).map((team) => [team.teamName, team]));
 
   // Migrate older name-only records and remove records belonging to deleted teams.
@@ -187,15 +191,20 @@ export function getGameState(): MemoryGameState {
     if (!seller || !buyer) return false;
     offer.sellerTeamName = seller.teamName;
     offer.buyerTeamName = buyer.teamName;
-    if (offer.status === "PENDING" && offer.round !== undefined && offer.round !== state.currentRound) offer.status = "CANCELLED";
+    if (offer.status === "PENDING") offer.status = "CANCELLED";
     return true;
   });
-  // Preserve credit for completed peer trades in sessions created before this rule.
+  // Migrate the previous direct-sale credits to completed share swaps only.
+  if (state.peerTradeRule !== "SWAPS_ONLY") {
+    Object.values(state.teams).forEach((team) => { delete team.peerTradesByRound; });
+    state.peerTradeRule = "SWAPS_ONLY";
+  }
+  // Historical direct sales used SWAP as their type; actual swaps have both legs in the ticker.
   Object.values(state.teams).forEach((team) => {
     if (team.peerTradesByRound) return;
     team.peerTradesByRound = {};
     state.transactions.forEach((tx) => {
-      if ((tx.type === "SWAP" || tx.type === "DIRECT_SELL") && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
+      if ((tx.type === "SWAP" && tx.ticker.includes("⇄")) && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
         recordPeerTrade(team, tx.round);
       }
     });

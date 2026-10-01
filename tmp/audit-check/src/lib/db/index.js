@@ -41,6 +41,8 @@ const neon_http_1 = require("drizzle-orm/neon-http");
 const schema = __importStar(require("./schema"));
 const market_data_1 = require("../market-data");
 const peer_trades_1 = require("../peer-trades");
+const node_crypto_1 = require("node:crypto");
+const context_1 = require("./context");
 const connectionString = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || "";
 exports.db = connectionString ? (0, neon_http_1.drizzle)((0, serverless_1.neon)(connectionString), { schema }) : null;
 // Global in-memory singleton
@@ -53,6 +55,7 @@ function getInitialGameState() {
         stockFloats[s.ticker] = 100; // 100 shares float limit
     });
     return {
+        simulationId: (0, node_crypto_1.randomUUID)(),
         currentRound: 0,
         status: "SETUP",
         tradingExpiresAt: null,
@@ -62,11 +65,13 @@ function getInitialGameState() {
         marketSellLockEnabled: true,
         marketSellCommissionEnabled: true,
         marketSellCommissionPercent: 5,
+        negotiatedPricesEnabled: true,
         scoresAnnouncement: null,
         stockPrices,
         stockFloats,
         customScenarios: {},
         customPriceShifts: {},
+        priceUpdateBases: {},
         directSellOffers: [],
         teams: {},
         transactions: [],
@@ -77,10 +82,12 @@ function getGameState() {
     if (!globalStore.__bullsBearsStore) {
         globalStore.__bullsBearsStore = getInitialGameState();
     }
-    const state = globalStore.__bullsBearsStore;
+    const state = context_1.gameStateContext.getStore() || globalStore.__bullsBearsStore;
+    state.simulationId ??= (0, node_crypto_1.randomUUID)();
     state.marketSellLockEnabled ??= true;
     state.marketSellCommissionEnabled ??= true;
     state.marketSellCommissionPercent ??= 5;
+    state.negotiatedPricesEnabled ??= true;
     const teamsByName = new Map(Object.values(state.teams).map((team) => [team.teamName, team]));
     // Migrate older name-only records and remove records belonging to deleted teams.
     state.transactions = state.transactions.filter((tx) => {
@@ -106,6 +113,8 @@ function getGameState() {
             return false;
         swap.senderTeam = sender.teamName;
         swap.receiverTeam = receiver.teamName;
+        if (swap.status === "PENDING" && swap.round !== undefined && swap.round !== state.currentRound)
+            swap.status = "CANCELLED";
         return true;
     });
     state.directSellOffers = (state.directSellOffers || []).filter((offer) => {
@@ -115,6 +124,8 @@ function getGameState() {
             return false;
         offer.sellerTeamName = seller.teamName;
         offer.buyerTeamName = buyer.teamName;
+        if (offer.status === "PENDING" && offer.round !== undefined && offer.round !== state.currentRound)
+            offer.status = "CANCELLED";
         return true;
     });
     // Preserve credit for completed peer trades in sessions created before this rule.
@@ -123,7 +134,7 @@ function getGameState() {
             return;
         team.peerTradesByRound = {};
         state.transactions.forEach((tx) => {
-            if (tx.type === "SWAP" && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
+            if ((tx.type === "SWAP" || tx.type === "DIRECT_SELL") && tx.counterpartyTeamId && (tx.teamId === team.id || tx.counterpartyTeamId === team.id)) {
                 (0, peer_trades_1.recordPeerTrade)(team, tx.round);
             }
         });

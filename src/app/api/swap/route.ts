@@ -1,3 +1,4 @@
+import { isTeamAuthenticated } from "@/src/lib/session";
 import { randomUUID } from "node:crypto";
 import { runGameStateRequest } from "@/src/lib/db/runtime";
 import { NextResponse } from "next/server";
@@ -10,6 +11,7 @@ async function execute(request: Request) {
     const { action, swapId, senderId, receiverId, giveTicker, giveQty, receiveTicker, receiveQty, teamId, simulationId } = await request.json();
 
     const state = getGameState();
+    if (!isTeamAuthenticated(request, state.teams[teamId])) return NextResponse.json({ error: "Your login expired. Please log in again." }, { status: 401 });
     if (simulationId !== state.simulationId) return NextResponse.json({ error: "The simulation was reset. Refresh your terminal before trading." }, { status: 409 });
 
     if (state.status !== "TRADING_OPEN" || (state.tradingExpiresAt && Date.now() >= state.tradingExpiresAt)) {
